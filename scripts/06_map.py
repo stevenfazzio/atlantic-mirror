@@ -3,8 +3,9 @@
 Each UK city is plotted at its coordinates; hovering shows its top US analogs (from stage 05)
 with similarity. Dots are sized by population and colored by the top match's similarity.
 
-Reads:  data/processed/matches_<model>.json, data/processed/cities.parquet
-Writes: output/uk_map_<model>.html  (self-contained)
+--source lead | profile (+ --profile-key) selects which matches to plot.
+Reads:  data/processed/matches_<model>[_profile_<key>].json, data/processed/cities.parquet
+Writes: output/uk_map_<model>[_profile_<key>].html  (self-contained)
 """
 
 from __future__ import annotations
@@ -24,9 +25,17 @@ MODEL_KEY = "nomic"
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=MODEL_KEY)
+    ap.add_argument(
+        "--source",
+        choices=["lead", "profile"],
+        default="lead",
+        help="lead embeddings or LLM character profiles",
+    )
+    ap.add_argument("--profile-key", default="haiku", help="distillation key for --source profile")
     args = ap.parse_args()
 
-    matches = json.loads((PROCESSED / f"matches_{args.model}.json").read_text())
+    suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
+    matches = json.loads((PROCESSED / f"matches_{args.model}{suffix}.json").read_text())
     pop = pd.read_parquet(PROCESSED / "cities.parquet").set_index("qid")["population"]
 
     rows, skipped = [], []
@@ -86,7 +95,7 @@ def main() -> None:
         showlakes=False,
     )
     fig.update_layout(
-        title=f"UK cities & their most similar US cities (hover) — {args.model}",
+        title=f"UK cities & their most similar US cities (hover) — {args.model}{suffix}",
         height=820,
         margin=dict(l=0, r=0, t=50, b=0),
         paper_bgcolor="white",
@@ -94,7 +103,7 @@ def main() -> None:
 
     out_dir = ROOT / "output"
     out_dir.mkdir(exist_ok=True)
-    out_path = out_dir / f"uk_map_{args.model}.html"
+    out_path = out_dir / f"uk_map_{args.model}{suffix}.html"
     fig.write_html(out_path, include_plotlyjs=True)
     print(f"Wrote {len(df)} cities -> {out_path}")
 

@@ -6,12 +6,12 @@ Builds three representations in a shared ~50-dim PCA space and compares them:
   leace     PCA + LEACE (linear concept erasure: no linear classifier can recover country)
 
 For each we report the country-confound diagnostics (nearest-neighbor same-country rate;
-US-vs-UK linear separability) and a qualitative UK->US neighbor preview, so we can watch the
-two country blobs merge while within-country character sharpens. CSLS / hubness correction
-is deliberately left for the reconstruction stage; here we use plain cosine.
+US-vs-UK linear separability) and a qualitative UK->US neighbor preview. CSLS / hubness
+correction is left for stage 05; here we use plain cosine.
 
-Reads:  data/processed/embeddings_<model>.parquet
-Writes: data/processed/reps_<model>.parquet  (long: identity + method + embedding)
+--source lead | profile (+ --profile-key) selects which embeddings to neutralize.
+Reads:  data/processed/embeddings_<model>[_profile_<key>].parquet
+Writes: data/processed/reps_<model>[_profile_<key>].parquet  (long: identity + method + embedding)
 """
 
 from __future__ import annotations
@@ -62,10 +62,19 @@ def neighbors(x: np.ndarray, ctry: np.ndarray, city: np.ndarray, q: str, k: int 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=MODEL_KEY)
+    ap.add_argument(
+        "--source",
+        choices=["lead", "profile"],
+        default="lead",
+        help="lead embeddings or LLM character profiles",
+    )
+    ap.add_argument("--profile-key", default="haiku", help="distillation key for --source profile")
     ap.add_argument("--n-pca", type=int, default=N_PCA)
     args = ap.parse_args()
 
-    df = pd.read_parquet(PROCESSED / f"embeddings_{args.model}.parquet").reset_index(drop=True)
+    suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
+    emb_path = PROCESSED / f"embeddings_{args.model}{suffix}.parquet"
+    df = pd.read_parquet(emb_path).reset_index(drop=True)
     x = np.vstack(df["embedding"].to_numpy()).astype("float64")  # float64 for LEACE stability
     ctry = df["country"].to_numpy()
     city = df["city"].to_numpy()
@@ -73,7 +82,7 @@ def main() -> None:
     pca = PCA(n_components=args.n_pca, svd_solver="full")
     xp = pca.fit_transform(x)
     print(
-        f"PCA: {x.shape[1]} -> {args.n_pca} dims, "
+        f"{emb_path.name}: PCA {x.shape[1]} -> {args.n_pca} dims, "
         f"explained variance = {pca.explained_variance_ratio_.sum():.1%}\n"
     )
 
@@ -111,8 +120,9 @@ def main() -> None:
         sub["embedding"] = [row.tolist() for row in m.astype("float32")]
         out.append(sub)
     out = pd.concat(out, ignore_index=True)
-    write_df(out, PROCESSED / f"reps_{args.model}.parquet")
-    print(f"Wrote reps_{args.model}.parquet: {len(out)} rows ({len(reps)}x{len(df)})")
+    reps_path = PROCESSED / f"reps_{args.model}{suffix}.parquet"
+    write_df(out, reps_path)
+    print(f"Wrote {reps_path.name}: {len(out)} rows ({len(reps)}x{len(df)})")
 
 
 if __name__ == "__main__":

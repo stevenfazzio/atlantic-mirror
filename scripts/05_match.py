@@ -5,8 +5,9 @@ suppresses hub US cities that are everyone's nearest neighbor) on the country-ne
 representation, and keep the top n. Each match carries a cosine similarity for display
 (e.g. dot size / shade on the map).
 
-Reads:  data/processed/reps_<model>.parquet (chosen method), data/processed/cities.parquet
-Writes: data/processed/matches_<model>.json  (map-ready, keyed by UK city)
+--source lead | profile (+ --profile-key) selects which representation to match on.
+Reads:  data/processed/reps_<model>[_profile_<key>].parquet, data/processed/cities.parquet
+Writes: data/processed/matches_<model>[_profile_<key>].json  (map-ready, keyed by UK city)
 """
 
 from __future__ import annotations
@@ -53,11 +54,19 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=MODEL_KEY)
     ap.add_argument(
+        "--source",
+        choices=["lead", "profile"],
+        default="lead",
+        help="lead embeddings or LLM character profiles",
+    )
+    ap.add_argument("--profile-key", default="haiku", help="distillation key for --source profile")
+    ap.add_argument(
         "--method", default="centroid", help="representation: centroid | leace | raw_pca"
     )
     args = ap.parse_args()
 
-    reps = pd.read_parquet(PROCESSED / f"reps_{args.model}.parquet")
+    suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
+    reps = pd.read_parquet(PROCESSED / f"reps_{args.model}{suffix}.parquet")
     reps = reps[reps["method"] == args.method].reset_index(drop=True)
     assert len(reps), f"no rows for method={args.method!r}"
     coords = pd.read_parquet(PROCESSED / "cities.parquet")[["qid", "lat", "lon"]]
@@ -86,14 +95,14 @@ def main() -> None:
             ],
         }
 
-    print(f"model={args.model} method={args.method} | {len(uk)} UK x {len(us)} US dictionary\n")
+    print(f"{args.source}/{args.method}: {len(uk)} UK x {len(us)} US\n")
     name_to_title = {r["city"]: t for t, r in records.items()}
     for q in REPORT:
         if q in name_to_title:
             ms = records[name_to_title[q]]["matches"]
             print(f"  {q:18s} -> " + ", ".join(f"{m['city']} ({m['similarity']:.2f})" for m in ms))
 
-    out_path = PROCESSED / f"matches_{args.model}.json"
+    out_path = PROCESSED / f"matches_{args.model}{suffix}.json"
     tmp = out_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(records, indent=2, ensure_ascii=False))
     tmp.replace(out_path)
