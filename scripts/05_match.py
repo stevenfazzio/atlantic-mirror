@@ -2,8 +2,8 @@
 
 For each UK city, rank US cities by CSLS (cross-domain similarity local scaling, which
 suppresses hub US cities that are everyone's nearest neighbor) on the country-neutralized
-representation, and keep the top n. Each match carries a cosine similarity for display
-(e.g. dot size / shade on the map).
+representation, and keep the top n. Each match carries a cosine similarity for display and the
+US city's qid (so stage 07 can fetch its exact lead).
 
 --source lead | profile (+ --profile-key) selects which representation to match on.
 Reads:  data/processed/reps_<model>[_profile_<key>].parquet, data/processed/cities.parquet
@@ -75,6 +75,7 @@ def main() -> None:
     us = reps[reps["country"] == "US"].reset_index(drop=True)
     uk = reps[reps["country"] == "UK"].reset_index(drop=True)
     us_name = us["city"].to_numpy()
+    us_qid = us["qid"].to_numpy()
     us_n = l2(np.vstack(us["embedding"].to_numpy()).astype("float64"))
     uk_n = l2(np.vstack(uk["embedding"].to_numpy()).astype("float64"))
 
@@ -91,7 +92,12 @@ def main() -> None:
             "lat": None if pd.isna(row["lat"]) else float(row["lat"]),
             "lon": None if pd.isna(row["lon"]) else float(row["lon"]),
             "matches": [
-                {"city": us_name[j], "similarity": round(float(cos[i, j]), 3)} for j in top
+                {
+                    "city": us_name[j],
+                    "qid": str(us_qid[j]),
+                    "similarity": round(float(cos[i, j]), 3),
+                }
+                for j in top
             ],
         }
 
