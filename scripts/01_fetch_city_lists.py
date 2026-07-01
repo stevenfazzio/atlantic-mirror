@@ -17,6 +17,10 @@ total languages then population.
 
 Requiring an English-Wikipedia article drops the empty duplicate/stub entities for free.
 
+Off-continent territories are excluded on the same geographic principle as the transcontinental
+states: Hawaii (mid-Pacific) and the Canary Islands (off NW Africa) are politically US/Spanish but
+not on the North American / European landmass. Alaska and Iceland are kept -- far, but on-continent.
+
 Outputs (data/interim/city_lists.{parquet,csv}):
   country       group: "US" | "Europe"  (drives stage 04 neutralization & stage 05 direction)
   country_name  real country            (display / diagnostics)
@@ -52,22 +56,92 @@ NA_EXTRA = {"Q16": "Canada", "Q96": "Mexico"}
 
 # European set = sovereign states (Q3624078) with continent (P30) = Europe (Q46) ...
 EUROPE, SOVEREIGN_STATE = "Q46", "Q3624078"
-REALM_FIX = {"Q756617": "Q35", "Q29999": "Q55"}  # Kingdom of {Denmark, Netherlands} -> country-proper
-TRANSCONTINENTAL = {"Q159", "Q43", "Q232", "Q230", "Q229"}  # Russia, Turkey, Kazakhstan, Georgia, Cyprus
+REALM_FIX = {
+    "Q756617": "Q35",
+    "Q29999": "Q55",
+}  # Kingdom of {Denmark, Netherlands} -> country-proper
+TRANSCONTINENTAL = {
+    "Q159",
+    "Q43",
+    "Q232",
+    "Q230",
+    "Q229",
+}  # Russia, Turkey, Kazakhstan, Georgia, Cyprus
+
+# Off-continent territories: politically US/Spanish but geographically part of ANOTHER continent, so
+# dropped on the same geographic principle as the transcontinental states above (cf. Cyprus, an EU
+# member excluded for sitting off Asia). Hawaii is mid-Pacific (Oceania); the Canary Islands sit on
+# the African plate ~100 km off Morocco. Alaska (North American landmass) and Iceland (a North
+# Atlantic European state) are KEPT -- far from the mainland, but genuinely on-continent. Listed by
+# QID: only these three reach the prominence cut, and stage 08 re-checks coordinates as a backstop.
+OFF_CONTINENT = {
+    "Q18094",  # Honolulu -- Hawaii (Pacific / Oceania)
+    "Q14328",  # Santa Cruz de Tenerife -- Canary Islands (off NW Africa)
+    "Q11974",  # Las Palmas de Gran Canaria -- Canary Islands (off NW Africa)
+}
 
 # ~40 largest human-curated Wikipedias (European + global mix); NO bot-farms.
 MAJOR40 = [
-    "en", "de", "fr", "es", "it", "ru", "pt", "nl", "pl", "uk", "sv", "cs", "ro", "hu", "fi",
-    "da", "no", "ca", "el", "ja", "zh", "ar", "fa", "he", "tr", "ko", "id", "vi", "hi", "th",
-    "sr", "hr", "sk", "sl", "bg", "lt", "et", "lv", "eu", "gl",
+    "en",
+    "de",
+    "fr",
+    "es",
+    "it",
+    "ru",
+    "pt",
+    "nl",
+    "pl",
+    "uk",
+    "sv",
+    "cs",
+    "ro",
+    "hu",
+    "fi",
+    "da",
+    "no",
+    "ca",
+    "el",
+    "ja",
+    "zh",
+    "ar",
+    "fa",
+    "he",
+    "tr",
+    "ko",
+    "id",
+    "vi",
+    "hi",
+    "th",
+    "sr",
+    "hr",
+    "sk",
+    "sl",
+    "bg",
+    "lt",
+    "et",
+    "lv",
+    "eu",
+    "gl",
 ]
 MAJOR_KEYS = {f"{c}wiki" for c in MAJOR40}
 BOT_WIKIS = {"cebwiki", "warwiki", "minwiki"}  # Lsjbot / bot mass-creations -- pure noise
-NON_LANG = {"commonswiki", "specieswiki", "metawiki", "mediawikiwiki", "wikidatawiki",
-            "sourceswiki", "foundationwiki", "incubatorwiki"}
+NON_LANG = {
+    "commonswiki",
+    "specieswiki",
+    "metawiki",
+    "mediawikiwiki",
+    "wikidatawiki",
+    "sourceswiki",
+    "foundationwiki",
+    "incubatorwiki",
+}
 
 NA_EXCLUDE_TITLES = {
-    "Manhattan", "Brooklyn", "Queens", "The Bronx", "Staten Island",  # NYC boroughs, not cities
+    "Manhattan",
+    "Brooklyn",
+    "Queens",
+    "The Bronx",
+    "Staten Island",  # NYC boroughs, not cities
     "Tenochtitlan",  # the ancient Aztec capital -- famous, but not a modern city
 }
 BAD_TITLE_RE = re.compile(
@@ -83,8 +157,10 @@ def qid(uri: str) -> str:
 
 def sparql(query: str, timeout: float = 120.0) -> dict:
     return http_get(
-        WDQS, {"query": query, "format": "json"},
-        accept="application/sparql-results+json", timeout=timeout,
+        WDQS,
+        {"query": query, "format": "json"},
+        accept="application/sparql-results+json",
+        timeout=timeout,
     ).json()
 
 
@@ -95,8 +171,13 @@ def resolve_and_score(qids: list[str]) -> dict:
         batch = qids[i : i + 50]
         payload = http_get(
             WD_API,
-            {"action": "wbgetentities", "ids": "|".join(batch), "props": "sitelinks|labels",
-             "languages": "en", "format": "json"},
+            {
+                "action": "wbgetentities",
+                "ids": "|".join(batch),
+                "props": "sitelinks|labels",
+                "languages": "en",
+                "format": "json",
+            },
             timeout=60.0,
         ).json()
         for q, ent in payload.get("entities", {}).items():
@@ -104,7 +185,9 @@ def resolve_and_score(qids: list[str]) -> dict:
             title = ent.get("sitelinks", {}).get("enwiki", {}).get("title")
             if not title:  # no English article -> stub/duplicate; skip
                 continue
-            langs = {k for k in keys if k.endswith("wiki") and k not in NON_LANG and k not in BOT_WIKIS}
+            langs = {
+                k for k in keys if k.endswith("wiki") and k not in NON_LANG and k not in BOT_WIKIS
+            }
             out[q] = {
                 "title": title,
                 "label": ent.get("labels", {}).get("en", {}).get("value", title),
@@ -180,8 +263,11 @@ def build_group(
     bindings: list[dict], *, group: str, name_of: dict, exclude_titles: set[str], force: bool
 ) -> pd.DataFrame:
     pairs = [
-        (qid(b["item"]["value"]), int(float(b["population"]["value"])),
-         qid(b["country"]["value"]) if "country" in b else None)
+        (
+            qid(b["item"]["value"]),
+            int(float(b["population"]["value"])),
+            qid(b["country"]["value"]) if "country" in b else None,
+        )
         for b in bindings
         if int(float(b["population"]["value"])) >= POP_FLOOR
     ]
@@ -193,22 +279,33 @@ def build_group(
     rows = []
     for q, pop, cqid in pairs:
         s = scored.get(q)
-        if s is None or s["title"] in exclude_titles or BAD_TITLE_RE.search(s["title"]):
+        if (
+            s is None
+            or q in OFF_CONTINENT
+            or s["title"] in exclude_titles
+            or BAD_TITLE_RE.search(s["title"])
+        ):
             continue
-        rows.append({
-            "country": group,
-            "country_name": name_of.get(cqid, name_of.get(group, group)),
-            "city": s["label"],
-            "population": pop,
-            "wikipedia_title": s["title"],
-            "qid": q,
-            "n_wikis": s["n_wikis"],
-            "n_langs": s["n_langs"],
-        })
+        rows.append(
+            {
+                "country": group,
+                "country_name": name_of.get(cqid, name_of.get(group, group)),
+                "city": s["label"],
+                "population": pop,
+                "wikipedia_title": s["title"],
+                "qid": q,
+                "n_wikis": s["n_wikis"],
+                "n_langs": s["n_langs"],
+            }
+        )
     df = pd.DataFrame(rows).sort_values(["n_wikis", "n_langs", "population"], ascending=False)
-    df = df.drop_duplicates("wikipedia_title").drop_duplicates("qid")  # keeps the most-prominent twin
+    df = df.drop_duplicates("wikipedia_title").drop_duplicates(
+        "qid"
+    )  # keeps the most-prominent twin
     df = df.head(N_PER_GROUP).reset_index(drop=True)
-    df["city"] = df["city"].str.replace(r"\s+Municipality$", "", regex=True)  # Mexican "X Municipality"
+    df["city"] = df["city"].str.replace(
+        r"\s+Municipality$", "", regex=True
+    )  # Mexican "X Municipality"
     # US namesakes (Columbus OH vs GA, three Springfields) share one Wikidata label; the enwiki
     # title carries the disambiguating state, so use it wherever a label collides within the group.
     collide = df["city"].duplicated(keep=False)
@@ -234,14 +331,35 @@ def main() -> None:
     name_of.update({"Q30": "United States", **NA_EXTRA})
     print(f"Europe: {len(eu_qids)} sovereign states (transcontinental excluded)")
 
-    na_df = build_group(fetch_north_america(args.force), group="North America", name_of=name_of,
-                        exclude_titles=NA_EXCLUDE_TITLES, force=args.force)
-    eu_df = build_group(fetch_europe(eu_qids, args.force), group="Europe", name_of=name_of,
-                        exclude_titles=set(), force=args.force)
+    na_df = build_group(
+        fetch_north_america(args.force),
+        group="North America",
+        name_of=name_of,
+        exclude_titles=NA_EXCLUDE_TITLES,
+        force=args.force,
+    )
+    eu_df = build_group(
+        fetch_europe(eu_qids, args.force),
+        group="Europe",
+        name_of=name_of,
+        exclude_titles=set(),
+        force=args.force,
+    )
 
     out = pd.concat([na_df, eu_df], ignore_index=True)
-    out = out[["country", "country_name", "rank", "city", "population",
-               "wikipedia_title", "qid", "n_wikis", "n_langs"]]
+    out = out[
+        [
+            "country",
+            "country_name",
+            "rank",
+            "city",
+            "population",
+            "wikipedia_title",
+            "qid",
+            "n_wikis",
+            "n_langs",
+        ]
+    ]
     write_df(out, INTERIM / "city_lists.parquet")
     write_df(out, INTERIM / "city_lists.csv")
 

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Atlantic Mirror — a character map between North America and Europe</title>
+  <meta name="description" content="Hover a city on either shore and meet the cities most like it in character on the other. 500 cities, matched on what kind of place they are — not their names." />
+
+  <!-- Type: a literary serif + a grotesque. Google Fonts is the only runtime network call;
+       everything else (data, map, libraries) is vendored locally, and the stack degrades
+       gracefully to good system serif/sans if fonts fail to load. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="masthead">
+      <div class="masthead__title">
+        <h1>Atlantic&nbsp;Mirror</h1>
+        <span class="masthead__rule" aria-hidden="true"></span>
+      </div>
+      <p class="dek">
+        What&rsquo;s the North American Munich? Touch a city on either shore and meet its
+        character&#8209;twins <em>across the ocean</em> &mdash; matched on the kind of place each is.
+      </p>
+    </header>
+
+    <main id="stage">
+      <svg id="map" role="img" aria-label="A composite map: North American cities on one side, European cities on the other, with the Atlantic cropped out. Selecting a city highlights its three closest character analogs on the opposite continent."></svg>
+
+      <p id="hint" class="hint" aria-hidden="true">
+        <span class="hint__dot"></span> <span class="hint__label">Hover a city to begin</span>
+      </p>
+
+      <div id="controls" aria-hidden="true">
+        <button type="button" data-zoom="in"  title="Zoom in"  aria-label="Zoom in">+</button>
+        <button type="button" data-zoom="out" title="Zoom out" aria-label="Zoom out">&minus;</button>
+        <button type="button" data-zoom="reset" title="Reset view" aria-label="Reset view">&#8634;</button>
+      </div>
+
+      <aside id="panel" class="panel" aria-live="polite" aria-hidden="true">
+        <button type="button" class="panel__close" aria-label="Close">&times;</button>
+        <div class="panel__body"><!-- filled by main.js --></div>
+        <button type="button" class="panel__bar">See the other two &#8595;</button>
+      </aside>
+    </main>
+
+    <footer class="colophon">
+      <span>500 cities &middot; 250 per shore, ranked by global prominence</span>
+      <span class="colophon__sep" aria-hidden="true">&bull;</span>
+      <span>character distilled by an LLM, matched by embedding geometry (CSLS)</span>
+      <span class="colophon__sep" aria-hidden="true">&bull;</span>
+      <span>English-Wikipedia leads, name- and country-neutralized before embedding</span>
+    </footer>
+  </div>
+
+  <script src="vendor/d3.v7.min.js"></script>
+  <script src="vendor/topojson-client.v3.min.js"></script>
+  <script src="main.js" defer></script>
+</body>
+</html>

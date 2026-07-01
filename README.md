@@ -30,13 +30,16 @@ disk. Outputs live under `data/` and `output/` (gitignored, regenerable).
 | 04 | `04_neutralize_country.py` | stage 03 + city_lists | `data/processed/reps_<model>[_profile_<key>].parquet` |
 | 05 | `05_match.py` | stage 04 + cities + city_lists | `data/processed/matches_<model>[_profile_<key>].json` |
 | 07 | `07_caption.py` | stage 05 + cities + Claude API | `…_captioned.json` (matches + a caption per pair) |
-| — | web map *(in progress)* | stage 07 | bespoke D3 composite map → GitHub Pages |
+| 08 | `08_export_web.py` | stage 07 + city_lists | `docs/data/atlantic-mirror.json` (slim web JSON) |
+| — | web map (`docs/`) | stage 08 | bespoke D3 two-panel map → GitHub Pages |
 
 **Selection (01)** ranks by prominence — presence across the ~40 largest human-curated Wikipedia
 language editions (bot-farms like Cebuano/Waray excluded) — above a 100k population floor, top-250
 per side. North America = US (the "city in the United States" type) + Canada + Mexico (city / town /
 municipality types); Europe = the 44 geographic-European sovereign states (continent = Europe, minus
-the transcontinental five: Russia, Turkey, Kazakhstan, Georgia, Cyprus).
+the transcontinental five: Russia, Turkey, Kazakhstan, Georgia, Cyprus). By the same geographic
+principle, off-continent territories are dropped despite being politically US/Spanish — Hawaii
+(Pacific) and the Canary Islands (off Africa); Alaska and Iceland are kept.
 
 **Matching (04–05)** treats the two continents as two groups, subtracts each group's centroid to
 neutralize the coarse "which continent" offset (≈ LEACE; stage 04 also reports residual same-country
@@ -60,11 +63,22 @@ uv run python scripts/03_embed.py               --source profile --profile-key h
 uv run python scripts/04_neutralize_country.py  --source profile --profile-key haiku
 uv run python scripts/05_match.py               --source profile --profile-key haiku
 uv run python scripts/07_caption.py             --source profile --profile-key haiku
+uv run python scripts/08_export_web.py          --source profile --profile-key haiku
 ```
 
-Product: `data/processed/matches_nomic_profile_haiku_captioned.json` — every city keyed by Wikidata
-QID with its group, real country, coordinates, and top-3 captioned analogs on the other continent.
-Add `--force` to any stage to ignore its cache.
+Products: `data/processed/matches_nomic_profile_haiku_captioned.json` (full — every city keyed by
+Wikidata QID with its group, real country, coordinates, and top-3 captioned analogs) and stage 08's
+slim `docs/data/atlantic-mirror.json`, which the web map loads. Add `--force` to any stage to ignore
+its cache.
+
+## Web map
+
+`docs/` is a static, dependency-free site (vendored d3 + topojson + world-atlas) served straight from
+GitHub Pages — no build step, no runtime keys. It renders **two independent, framed map-cards** (North
+America and Europe), each pan/zoomable on its own; hover (or tap) a city and its three character-twins
+light up on the opposite card, with an arc to each and a card of captions — one sentence per pair,
+written to fit *both* cities. Regenerate its data with stage 08, then preview locally with
+`python3 -m http.server -d docs` (open `http://127.0.0.1:8000`).
 
 ## Method notes & dropped approaches
 
