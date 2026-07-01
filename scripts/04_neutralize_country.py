@@ -2,15 +2,17 @@
 
 Builds three representations in a shared ~50-dim PCA space and compares them:
   raw_pca   PCA only (control)
-  centroid  PCA + per-country mean subtraction (removes the first-moment country offset)
-  leace     PCA + LEACE (linear concept erasure: no linear classifier can recover country)
+  centroid  PCA + per-GROUP mean subtraction (removes the first-moment US/Europe offset)
+  leace     PCA + LEACE (linear concept erasure: no linear classifier can recover the group)
 
-For each we report the country-confound diagnostics (nearest-neighbor same-country rate;
-US-vs-UK linear separability) and a qualitative UK->US neighbor preview. CSLS / hubness
-correction is left for stage 05; here we use plain cosine.
+Two groups only -- "US" and "Europe" (Europe pooled, no per-country structure). For each rep we
+report: nearest-neighbor same-GROUP rate, US-vs-Europe linear separability, and an "EU same-country
+NN" tripwire -- among European cities, how often the nearest European neighbor shares the real
+country (high => pooling Europe still leaves strong per-nationality clustering). Plus a qualitative
+Europe->US neighbor preview. CSLS / hubness correction is left for stage 05; here we use plain cosine.
 
 --source lead | profile (+ --profile-key) selects which embeddings to neutralize.
-Reads:  data/processed/embeddings_<model>[_profile_<key>].parquet
+Reads:  data/processed/embeddings_<model>[_profile_<key>].parquet  (+ city_lists for country_name)
 Writes: data/processed/reps_<model>[_profile_<key>].parquet  (long: identity + method + embedding)
 """
 
@@ -24,12 +26,12 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
 
-from _common import PROCESSED, write_df
+from _common import INTERIM, PROCESSED, write_df
 
 MODEL_KEY = "nomic"
 N_PCA = 50
 ID_COLS = ["country", "rank", "city", "population", "wikipedia_title", "qid"]
-SAMPLE_QUERIES = ["Manchester", "Oxford", "Liverpool", "Brighton and Hove", "Cambridge"]
+SAMPLE_QUERIES = ["Manchester", "Lyon", "Munich", "Naples", "Rotterdam"]
 
 
 def l2(m: np.ndarray) -> np.ndarray:
@@ -37,25 +39,36 @@ def l2(m: np.ndarray) -> np.ndarray:
 
 
 def diagnostics(x: np.ndarray, ctry: np.ndarray) -> tuple[float, float]:
-    """(nearest-neighbor same-country rate, US-vs-UK 5-fold logistic accuracy)."""
+    """(nearest-neighbor same-group rate, US-vs-Europe 5-fold logistic accuracy)."""
     xn = l2(x)
     sim = xn @ xn.T
     np.fill_diagonal(sim, -1.0)
     same = (ctry[sim.argmax(1)] == ctry).mean()
-    y = (ctry == "US").astype(int)
+    y = (ctry == "North America").astype(int)
     acc = cross_val_score(LogisticRegression(max_iter=5000), x, y, cv=5).mean()
     return same, acc
 
 
+def nationality_nn(x: np.ndarray, ctry: np.ndarray, cname: np.ndarray) -> float:
+    """Tripwire for residual nationality signal: among European cities, the fraction whose nearest
+    European neighbor shares the real country. High => Europe-as-one-group still clusters by
+    nationality (character crosses borders less than we'd like). Diluted by single-city countries."""
+    eu = np.where(ctry == "Europe")[0]
+    xe = l2(x[eu])
+    sim = xe @ xe.T
+    np.fill_diagonal(sim, -1.0)
+    return (cname[eu][sim.argmax(1)] == cname[eu]).mean()
+
+
 def neighbors(x: np.ndarray, ctry: np.ndarray, city: np.ndarray, q: str, k: int = 3) -> str:
     xn = l2(x)
-    us = np.where(ctry == "US")[0]
-    idx = np.where(city == q)[0]
+    na = np.where(ctry == "North America")[0]
+    idx = np.where((city == q) & (ctry == "Europe"))[0]  # the European namesake, not the US one
     if not len(idx):
         return f"{q}: (not in set)"
     i = idx[0]
-    sims = xn[us] @ xn[i]
-    top = us[np.argsort(-sims)[:k]]
+    sims = xn[na] @ xn[i]
+    top = na[np.argsort(-sims)[:k]]
     return f"{q:18s} -> " + ", ".join(f"{city[j]} ({xn[i] @ xn[j]:.2f})" for j in top)
 
 
@@ -79,6 +92,10 @@ def main() -> None:
     ctry = df["country"].to_numpy()
     city = df["city"].to_numpy()
 
+    meta = pd.read_parquet(INTERIM / "city_lists.parquet")[["qid", "country_name"]]
+    name_map = dict(zip(meta["qid"], meta["country_name"]))
+    cname = np.array([name_map.get(q, "?") for q in df["qid"]])
+
     pca = PCA(n_components=args.n_pca, svd_solver="full")
     xp = pca.fit_transform(x)
     print(
@@ -88,27 +105,28 @@ def main() -> None:
 
     reps: dict[str, np.ndarray] = {"raw_pca": xp}
 
-    # centroid subtraction: remove each country's own mean (first-moment country offset)
+    # centroid subtraction: remove each group's own mean (first-moment US/Europe offset)
     xc = xp.copy()
-    for c in ("US", "UK"):
+    for c in ("North America", "Europe"):
         m = ctry == c
         xc[m] = xp[m] - xp[m].mean(0)
     reps["centroid"] = xc
 
-    # LEACE: erase the binary country concept (linear guardedness)
+    # LEACE: erase the binary US-vs-Europe concept (linear guardedness)
     import torch
     from concept_erasure import LeaceEraser
 
-    eraser = LeaceEraser.fit(torch.from_numpy(xp), torch.from_numpy((ctry == "US").astype("int64")))
+    eraser = LeaceEraser.fit(torch.from_numpy(xp), torch.from_numpy((ctry == "North America").astype("int64")))
     reps["leace"] = eraser(torch.from_numpy(xp)).numpy()
 
-    print(f"{'method':10s} {'NN same-country':>16s} {'US/UK separability':>20s}")
+    print(f"{'method':10s} {'NN same-group':>14s} {'NA/Eur sep':>12s} {'EU same-country NN':>20s}")
     for name, m in reps.items():
         same, acc = diagnostics(m, ctry)
-        print(f"{name:10s} {same:>15.1%} {acc:>19.1%}")
+        natl = nationality_nn(m, ctry, cname)
+        print(f"{name:10s} {same:>13.1%} {acc:>11.1%} {natl:>19.1%}")
     print()
     for name, m in reps.items():
-        print(f"--- {name}: UK -> nearest US (plain cosine, no CSLS yet) ---")
+        print(f"--- {name}: Europe -> nearest North American (plain cosine, no CSLS yet) ---")
         for q in SAMPLE_QUERIES:
             print("   " + neighbors(m, ctry, city, q))
         print()

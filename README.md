@@ -1,71 +1,94 @@
-# International Sibling Cities
+# Atlantic Mirror
 
-Explaining cities in one country through *familiar* cities from another. The use case: a US
-reader hovers over a UK city on a map and sees the US cities most like it.
+A two-way character mirror between **North America** and **Europe**. Hover a city on either shore
+and see the cities most like it *in character* on the other: what's the North American Turin?
+(Pittsburgh). Which European city is the Milwaukee of the old world? (Munich, Plzeň). What's
+Edinburgh's counterpart? (Ottawa, a fellow capital-and-university town).
 
-The pipeline embeds a short description of each city, neutralizes the dominant "which
-country" signal, and ranks cross-country analogs. The key move is **not** to embed the raw
-Wikipedia text: an LLM first distills each lead into a name-free, country-free **character
-profile** (industry, geography, scale, history, culture). Embedding those profiles instead
-of the leads removes name collisions at the source (the UK and US "Birmingham" no longer
-match on their shared name), focuses matching on city *character*, and softens the residual
-country signal. Matching runs on the country-neutralized profile embeddings with CSLS (which
-corrects for hub cities); each UK city gets its top-3 US analogs with cosine weights, and an
-LLM writes a one-phrase caption per pair (grounded in the original leads) describing the
-shared character.
+250 North American cities (US + Canada + Mexico) and 250 European cities, each chosen by **global
+prominence** — how many of the world's Wikipedias cover it — and matched on **character, not name**.
+The key move: an LLM first distills each city's Wikipedia lead into a name-free, country-free
+**character profile** (industry, geography, scale, history, culture). Embedding those profiles
+instead of the raw text removes name collisions at the source (the UK and US "Birmingham" no longer
+match on their shared name), focuses matching on what kind of place a city *is*, and dampens the
+"which continent" signal. Matching runs **both directions** on the group-neutralized profile
+embeddings via CSLS (which suppresses hub cities that are everyone's nearest neighbor); each city
+gets its top-3 analogs on the other continent, and an LLM writes a one-phrase caption per pair
+capturing the shared character.
 
 ## Pipeline
 
-Numbered scripts under `scripts/`, each cached and idempotent — re-running skips work
-already on disk. Outputs live under `data/` and `output/` (gitignored, regenerable).
+Numbered scripts under `scripts/`, each cached and idempotent — re-running skips work already on
+disk. Outputs live under `data/` and `output/` (gitignored, regenerable).
 
 | Stage | Script | Reads | Writes |
 |-------|--------|-------|--------|
-| 01 | `01_fetch_city_lists.py` | Wikidata SPARQL | `data/interim/city_lists.{parquet,csv}` |
+| 01 | `01_fetch_city_lists.py` | Wikidata SPARQL + wbgetentities | `data/interim/city_lists.{parquet,csv}` |
 | 02 | `02_fetch_leads.py` | stage 01 + MediaWiki API | `data/processed/cities.parquet` |
 | 02b | `02b_distill.py` | stage 02 + Claude API | `data/processed/profiles_<key>.parquet` |
 | 03 | `03_embed.py` | stage 02 or 02b | `data/processed/embeddings_<model>[_profile_<key>].parquet` |
-| 04 | `04_neutralize_country.py` | stage 03 | `data/processed/reps_<model>[_profile_<key>].parquet` |
-| 05 | `05_match.py` | stage 04 + cities | `data/processed/matches_<model>[_profile_<key>].json` |
+| 04 | `04_neutralize_country.py` | stage 03 + city_lists | `data/processed/reps_<model>[_profile_<key>].parquet` |
+| 05 | `05_match.py` | stage 04 + cities + city_lists | `data/processed/matches_<model>[_profile_<key>].json` |
 | 07 | `07_caption.py` | stage 05 + cities + Claude API | `…_captioned.json` (matches + a caption per pair) |
-| 06 | `06_map.py` | stage 05/07 + cities | `output/uk_map_<model>[_profile_<key>].html` |
+| 08 | `08_export_web.py` | stage 07 + city_lists | `docs/data/atlantic-mirror.json` (slim web JSON) |
+| — | web map (`docs/`) | stage 08 | bespoke D3 two-panel map → GitHub Pages |
 
-Caption runs *after* matching and *before* the map: stage 07 augments stage 05's matches with a
-shared-character phrase, and stage 06 renders the captioned file if present. Stages 03–07 take
-`--source {lead,profile}` (and `--profile-key`, e.g. `haiku`/`opus`): the **profile** track is
-primary; the **lead** track is kept as a control. Stage 02b takes `--model`/`--key` to distill
-with different LLMs. Stage 04 builds three neutralized representations (`raw_pca`, `centroid`,
-`leace`) with diagnostics; stage 05 reads one (default `centroid`).
+**Selection (01)** ranks by prominence — presence across the ~40 largest human-curated Wikipedia
+language editions (bot-farms like Cebuano/Waray excluded) — above a 100k population floor, top-250
+per side. North America = US (the "city in the United States" type) + Canada + Mexico (city / town /
+municipality types); Europe = the 44 geographic-European sovereign states (continent = Europe, minus
+the transcontinental five: Russia, Turkey, Kazakhstan, Georgia, Cyprus). By the same geographic
+principle, off-continent territories are dropped despite being politically US/Spanish — Hawaii
+(Pacific) and the Canary Islands (off Africa); Alaska and Iceland are kept.
 
-Raw API responses are cached verbatim under `data/raw/` (SPARQL, leads, one file per distilled
-profile, one per caption) so we never re-hit the network or re-pay an LLM call. Stages 02b and
-07 need `ANTHROPIC_API_KEY`.
+**Matching (04–05)** treats the two continents as two groups, subtracts each group's centroid to
+neutralize the coarse "which continent" offset (≈ LEACE; stage 04 also reports residual same-country
+clustering as a tripwire), then ranks *both* directions from one symmetric CSLS matrix. Stage 05's
+default representation is `centroid`. Stages 03–07 take `--source {lead,profile}` + `--profile-key`;
+the **profile** track is primary, the **lead** track is a control.
+
+Raw API responses are cached verbatim under `data/raw/` (SPARQL, sitelinks, leads, one file per
+distilled profile, one per caption) so we never re-hit the network or re-pay an LLM call. Stages 02b
+and 07 need `ANTHROPIC_API_KEY`.
 
 ## Running
 
 ```sh
 uv sync
+export ANTHROPIC_API_KEY=...                                    # for 02b + 07
 uv run python scripts/01_fetch_city_lists.py
 uv run python scripts/02_fetch_leads.py
-uv run python scripts/02b_distill.py --model claude-haiku-4-5 --key haiku
-# primary (profile) track:
-uv run python scripts/03_embed.py --source profile
-uv run python scripts/04_neutralize_country.py --source profile
-uv run python scripts/05_match.py --source profile
-uv run python scripts/07_caption.py --source profile
-uv run python scripts/06_map.py --source profile
+uv run python scripts/02b_distill.py            --model claude-haiku-4-5 --key haiku
+uv run python scripts/03_embed.py               --source profile --profile-key haiku
+uv run python scripts/04_neutralize_country.py  --source profile --profile-key haiku
+uv run python scripts/05_match.py               --source profile --profile-key haiku
+uv run python scripts/07_caption.py             --source profile --profile-key haiku
+uv run python scripts/08_export_web.py          --source profile --profile-key haiku
 ```
 
-Drop `--source profile` from 03–07 for the lead-based control track. Add `--force` to ignore a
-stage's cache.
+Products: `data/processed/matches_nomic_profile_haiku_captioned.json` (full — every city keyed by
+Wikidata QID with its group, real country, coordinates, and top-3 captioned analogs) and stage 08's
+slim `docs/data/atlantic-mirror.json`, which the web map loads. Add `--force` to any stage to ignore
+its cache.
 
-View the map by serving the output dir (avoids `file://` issues):
-`python3 -m http.server -d output`, then open `uk_map_nomic_profile_haiku.html`.
+## Web map
 
-## Analysis
+`docs/` is a static, dependency-free site (vendored d3 + topojson + world-atlas) served straight from
+GitHub Pages — no build step, no runtime keys. It renders **two independent, framed map-cards** (North
+America and Europe), each pan/zoomable on its own; hover (or tap) a city and its three character-twins
+light up on the opposite card, with an arc to each and a card of captions — one sentence per pair,
+written to fit *both* cities. Regenerate its data with stage 08, then preview locally with
+`python3 -m http.server -d docs` (open `http://127.0.0.1:8000`).
 
-`eval_profiles.py` runs the head-to-head (lead vs profile-opus vs profile-haiku) on the
-name-collision, country-residual, and face-validity metrics; `analyze_name_collisions.py`
-quantifies the name-collision effect. The `prototype_*` scripts hold the explored-and-rejected
-name-fix experiments (output surgery, masking, name-vector / subspace projection) and the
-caption-prompt prototype, plus shared helpers used by `eval_profiles.py`.
+## Method notes & dropped approaches
+
+- **Prominence, not population.** City-proper population is administratively inconsistent across
+  countries (French communes tiny; German/Ukrainian/US units large); Wikipedia-language-edition
+  count is boundary-independent and better captures "cities worth showing."
+- **Distillation is validated** head-to-head vs. lead embeddings (kills namesake collisions, fixes
+  character misses), and **Haiku matched Opus** at ~5× less cost — so Haiku is primary.
+- Explored and rejected (`scripts/prototype_*.py`, `eval_profiles.py`, `analyze_name_collisions.py`):
+  1:1 bijection, convex "build-a-city-from-parts" reconstruction, MMR diversification, and every
+  output-surgery / masking / name-subspace approach to name collisions — distillation supersedes them.
+
+`scripts/06_map.py` is the retired Plotly UK map, kept for reference and superseded by the D3 web map.
