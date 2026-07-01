@@ -44,7 +44,7 @@ def diagnostics(x: np.ndarray, ctry: np.ndarray) -> tuple[float, float]:
     sim = xn @ xn.T
     np.fill_diagonal(sim, -1.0)
     same = (ctry[sim.argmax(1)] == ctry).mean()
-    y = (ctry == "US").astype(int)
+    y = (ctry == "North America").astype(int)
     acc = cross_val_score(LogisticRegression(max_iter=5000), x, y, cv=5).mean()
     return same, acc
 
@@ -62,13 +62,13 @@ def nationality_nn(x: np.ndarray, ctry: np.ndarray, cname: np.ndarray) -> float:
 
 def neighbors(x: np.ndarray, ctry: np.ndarray, city: np.ndarray, q: str, k: int = 3) -> str:
     xn = l2(x)
-    us = np.where(ctry == "US")[0]
+    na = np.where(ctry == "North America")[0]
     idx = np.where((city == q) & (ctry == "Europe"))[0]  # the European namesake, not the US one
     if not len(idx):
         return f"{q}: (not in set)"
     i = idx[0]
-    sims = xn[us] @ xn[i]
-    top = us[np.argsort(-sims)[:k]]
+    sims = xn[na] @ xn[i]
+    top = na[np.argsort(-sims)[:k]]
     return f"{q:18s} -> " + ", ".join(f"{city[j]} ({xn[i] @ xn[j]:.2f})" for j in top)
 
 
@@ -107,7 +107,7 @@ def main() -> None:
 
     # centroid subtraction: remove each group's own mean (first-moment US/Europe offset)
     xc = xp.copy()
-    for c in ("US", "Europe"):
+    for c in ("North America", "Europe"):
         m = ctry == c
         xc[m] = xp[m] - xp[m].mean(0)
     reps["centroid"] = xc
@@ -116,17 +116,17 @@ def main() -> None:
     import torch
     from concept_erasure import LeaceEraser
 
-    eraser = LeaceEraser.fit(torch.from_numpy(xp), torch.from_numpy((ctry == "US").astype("int64")))
+    eraser = LeaceEraser.fit(torch.from_numpy(xp), torch.from_numpy((ctry == "North America").astype("int64")))
     reps["leace"] = eraser(torch.from_numpy(xp)).numpy()
 
-    print(f"{'method':10s} {'NN same-group':>14s} {'US/Eur sep':>12s} {'EU same-country NN':>20s}")
+    print(f"{'method':10s} {'NN same-group':>14s} {'NA/Eur sep':>12s} {'EU same-country NN':>20s}")
     for name, m in reps.items():
         same, acc = diagnostics(m, ctry)
         natl = nationality_nn(m, ctry, cname)
         print(f"{name:10s} {same:>13.1%} {acc:>11.1%} {natl:>19.1%}")
     print()
     for name, m in reps.items():
-        print(f"--- {name}: Europe -> nearest US (plain cosine, no CSLS yet) ---")
+        print(f"--- {name}: Europe -> nearest North American (plain cosine, no CSLS yet) ---")
         for q in SAMPLE_QUERIES:
             print("   " + neighbors(m, ctry, city, q))
         print()

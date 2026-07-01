@@ -1,13 +1,13 @@
-"""Stage 05: bidirectional matching -- each European city <-> its most similar US cities.
+"""Stage 05: bidirectional matching -- each European city <-> its most similar North American cities.
 
 Both directions on the country-neutralized representation, ranked by CSLS (cross-domain similarity
-local scaling, which suppresses hub cities that are everyone's nearest neighbor): each European
-city -> top-n US analogs, AND each US city -> top-n European analogs. The CSLS pairwise score is
-symmetric, so we compute one Europe x US matrix and read it both ways -- top per ROW for
-Europe->US, top per COLUMN for US->Europe. Memberships differ per side (the embraced asymmetry:
-Manchester's #1 US match need not have Manchester as its #1 European match). Pools are disjoint,
-so no same-group exclusion is needed. Each match carries a cosine similarity and the other city's
-qid (so stage 07 can caption it and the map can look it up).
+local scaling, which suppresses hub cities that are everyone's nearest neighbor): each European city
+-> top-n North American analogs, AND each North American city -> top-n European analogs. The CSLS
+pairwise score is symmetric, so we compute one Europe x North-America matrix and read it both ways --
+top per ROW for Europe->NA, top per COLUMN for NA->Europe. Memberships differ per side (the embraced
+asymmetry: a city's #1 match need not have it as its #1 match back). Pools are disjoint, so no
+same-group exclusion is needed. Each match carries a cosine similarity and the other city's qid (so
+stage 07 can caption it and the map can look it up).
 
 --source lead | profile (+ --profile-key); --method centroid | leace | raw_pca.
 Reads:  reps_<model>[_profile_<key>].parquet, cities.parquet, city_lists.parquet (country_name)
@@ -28,7 +28,7 @@ MODEL_KEY = "nomic"
 N_OUT = 3
 CSLS_NBRS = 10
 REPORT_EU = ["Manchester", "Lyon", "Munich", "Naples", "Rotterdam", "Barcelona", "Edinburgh", "Hamburg"]
-REPORT_US = ["Pittsburgh", "Milwaukee", "New Orleans", "Las Vegas", "Boston", "Portland, Oregon"]
+REPORT_NA = ["Pittsburgh", "Milwaukee", "New Orleans", "Montreal", "Mexico City", "Vancouver", "Boston"]
 
 
 def l2(m: np.ndarray) -> np.ndarray:
@@ -61,14 +61,14 @@ def main() -> None:
     reps = reps.merge(coords, on="qid", how="left").merge(names, on="qid", how="left")
 
     eu = reps[reps["country"] == "Europe"].reset_index(drop=True)
-    us = reps[reps["country"] == "US"].reset_index(drop=True)
+    na = reps[reps["country"] == "North America"].reset_index(drop=True)
     eu_n = l2(np.vstack(eu["embedding"].to_numpy()).astype("float64"))
-    us_n = l2(np.vstack(us["embedding"].to_numpy()).astype("float64"))
+    na_n = l2(np.vstack(na["embedding"].to_numpy()).astype("float64"))
     eu_name, eu_qid = eu["city"].to_numpy(), eu["qid"].to_numpy()
-    us_name, us_qid = us["city"].to_numpy(), us["qid"].to_numpy()
+    na_name, na_qid = na["city"].to_numpy(), na["qid"].to_numpy()
 
-    csls = csls_matrix(eu_n, us_n, CSLS_NBRS)  # eu x us; ranking (hubness-corrected)
-    cos = eu_n @ us_n.T  # cosine for display weights (symmetric across directions)
+    csls = csls_matrix(eu_n, na_n, CSLS_NBRS)  # eu x na; ranking (hubness-corrected)
+    cos = eu_n @ na_n.T  # cosine for display weights (symmetric across directions)
 
     records: dict[str, dict] = {}
 
@@ -82,32 +82,32 @@ def main() -> None:
             "matches": matches,
         }
 
-    for i in range(len(eu)):  # Europe -> US (top per row)
+    for i in range(len(eu)):  # Europe -> North America (top per row)
         top = np.argsort(-csls[i])[:N_OUT]
         add(eu.iloc[i], [
-            {"qid": str(us_qid[j]), "city": us_name[j], "similarity": round(float(cos[i, j]), 3)}
+            {"qid": str(na_qid[j]), "city": na_name[j], "similarity": round(float(cos[i, j]), 3)}
             for j in top
         ])
-    for j in range(len(us)):  # US -> Europe (top per column)
+    for j in range(len(na)):  # North America -> Europe (top per column)
         top = np.argsort(-csls[:, j])[:N_OUT]
-        add(us.iloc[j], [
+        add(na.iloc[j], [
             {"qid": str(eu_qid[i]), "city": eu_name[i], "similarity": round(float(cos[i, j]), 3)}
             for i in top
         ])
 
-    print(f"{args.source}/{args.method}: {len(eu)} Europe x {len(us)} US, both directions\n")
+    print(f"{args.source}/{args.method}: {len(eu)} Europe x {len(na)} North America, both directions\n")
     eu_ix = {eu_name[i]: i for i in range(len(eu))}
-    us_ix = {us_name[j]: j for j in range(len(us))}
-    print("Europe -> US:")
+    na_ix = {na_name[j]: j for j in range(len(na))}
+    print("Europe -> North America:")
     for q in REPORT_EU:
         if q in eu_ix:
             i = eu_ix[q]
             top = np.argsort(-csls[i])[:N_OUT]
-            print(f"  {q:18s} -> " + ", ".join(f"{us_name[j]} ({cos[i, j]:.2f})" for j in top))
-    print("\nUS -> Europe:")
-    for q in REPORT_US:
-        if q in us_ix:
-            j = us_ix[q]
+            print(f"  {q:18s} -> " + ", ".join(f"{na_name[j]} ({cos[i, j]:.2f})" for j in top))
+    print("\nNorth America -> Europe:")
+    for q in REPORT_NA:
+        if q in na_ix:
+            j = na_ix[q]
             top = np.argsort(-csls[:, j])[:N_OUT]
             print(f"  {q:18s} -> " + ", ".join(f"{eu_name[i]} ({cos[i, j]:.2f})" for i in top))
 

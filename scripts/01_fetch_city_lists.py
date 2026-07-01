@@ -47,6 +47,8 @@ CITY_TYPES = (
     "UNION { ?item wdt:P31/wdt:P279* wd:Q15284 }"
 )
 US_CITY_CLOSURE = "?item wdt:P31/wdt:P279* wd:Q1093829 ; wdt:P1082 ?pop ."
+# North America = US (clean "city in the US" anchor) + Canada & Mexico (city/town/municipality net).
+NA_EXTRA = {"Q16": "Canada", "Q96": "Mexico"}
 
 # European set = sovereign states (Q3624078) with continent (P30) = Europe (Q46) ...
 EUROPE, SOVEREIGN_STATE = "Q46", "Q3624078"
@@ -64,7 +66,10 @@ BOT_WIKIS = {"cebwiki", "warwiki", "minwiki"}  # Lsjbot / bot mass-creations -- 
 NON_LANG = {"commonswiki", "specieswiki", "metawiki", "mediawikiwiki", "wikidatawiki",
             "sourceswiki", "foundationwiki", "incubatorwiki"}
 
-US_EXCLUDE_TITLES = {"Manhattan", "Brooklyn", "Queens", "The Bronx", "Staten Island"}
+NA_EXCLUDE_TITLES = {
+    "Manhattan", "Brooklyn", "Queens", "The Bronx", "Staten Island",  # NYC boroughs, not cities
+    "Tenochtitlan",  # the ancient Aztec capital -- famous, but not a modern city
+}
 BAD_TITLE_RE = re.compile(
     r"(urban area|metropolitan area|metropolitan region|conurbation|agglomeration"
     r"|\((?:state|region|province|oblast|voivodeship|county|district)\))$",
@@ -159,6 +164,18 @@ def fetch_us(force: bool) -> list[dict]:
     return raw["results"]["bindings"]
 
 
+def fetch_north_america(force: bool) -> list[dict]:
+    """US via the 'city in the United States' anchor + Canada/Mexico via the city/town/municipality
+    net, pooled into one candidate set (each binding tagged with its country QID)."""
+    bindings = []
+    for b in fetch_us(force):
+        b = dict(b)
+        b["country"] = {"value": "http://www.wikidata.org/entity/Q30"}
+        bindings.append(b)
+    bindings += fetch_europe(list(NA_EXTRA), force)  # Q16 Canada, Q96 Mexico
+    return bindings
+
+
 def build_group(
     bindings: list[dict], *, group: str, name_of: dict, exclude_titles: set[str], force: bool
 ) -> pd.DataFrame:
@@ -191,6 +208,7 @@ def build_group(
     df = pd.DataFrame(rows).sort_values(["n_wikis", "n_langs", "population"], ascending=False)
     df = df.drop_duplicates("wikipedia_title").drop_duplicates("qid")  # keeps the most-prominent twin
     df = df.head(N_PER_GROUP).reset_index(drop=True)
+    df["city"] = df["city"].str.replace(r"\s+Municipality$", "", regex=True)  # Mexican "X Municipality"
     # US namesakes (Columbus OH vs GA, three Springfields) share one Wikidata label; the enwiki
     # title carries the disambiguating state, so use it wherever a label collides within the group.
     collide = df["city"].duplicated(keep=False)
@@ -213,15 +231,15 @@ def main() -> None:
         force=args.force,
     )
     name_of = {q: e["label"] for q, e in country_names.items()}
-    name_of["US"] = "United States"
+    name_of.update({"Q30": "United States", **NA_EXTRA})
     print(f"Europe: {len(eu_qids)} sovereign states (transcontinental excluded)")
 
-    us_df = build_group(fetch_us(args.force), group="US", name_of=name_of,
-                        exclude_titles=US_EXCLUDE_TITLES, force=args.force)
+    na_df = build_group(fetch_north_america(args.force), group="North America", name_of=name_of,
+                        exclude_titles=NA_EXCLUDE_TITLES, force=args.force)
     eu_df = build_group(fetch_europe(eu_qids, args.force), group="Europe", name_of=name_of,
                         exclude_titles=set(), force=args.force)
 
-    out = pd.concat([us_df, eu_df], ignore_index=True)
+    out = pd.concat([na_df, eu_df], ignore_index=True)
     out = out[["country", "country_name", "rank", "city", "population",
                "wikipedia_title", "qid", "n_wikis", "n_langs"]]
     write_df(out, INTERIM / "city_lists.parquet")
