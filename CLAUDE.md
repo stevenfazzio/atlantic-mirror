@@ -2,7 +2,8 @@
 
 A two-way character mirror between North American and European cities (full overview in README.md).
 Python data pipeline (`scripts/`, numbered stages) → bespoke D3 web map (`docs/`, built) → GitHub
-Pages. Public repo `atlantic-mirror`; active work is on the `europe-pivot` branch.
+Pages — **live** at https://stevenfazzio.github.io/atlantic-mirror/. Public repo `atlantic-mirror`;
+the North America↔Europe pivot is merged (PR #1), so work on `main` now.
 
 ## Running the pipeline
 Stages run in order 01 → 02 → 02b → 03 → 04 → 05 → 07 → 08, each cached/idempotent (re-runs skip done
