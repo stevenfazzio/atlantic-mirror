@@ -76,13 +76,15 @@ def main() -> None:
     ap.add_argument("--model", default="nomic")
     ap.add_argument("--source", choices=["lead", "profile"], default="profile")
     ap.add_argument("--profile-key", default="haiku")
+    ap.add_argument("--caption-key", default="", help="caption variant to export (matches 07 --caption-key; baseline = empty)")
     ap.add_argument(
         "--force", action="store_true", help="re-fetch coordinate backfill, ignoring cache"
     )
     args = ap.parse_args()
 
     suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
-    src = PROCESSED / f"matches_{args.model}{suffix}_captioned.json"
+    cap = f"_{args.caption_key}" if args.caption_key else ""
+    src = PROCESSED / f"matches_{args.model}{suffix}_captioned{cap}.json"
     matches = json.loads(src.read_text())
 
     # rank (1 = most prominent per group) drives dot size; wiki title builds the article link

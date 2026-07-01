@@ -24,7 +24,7 @@ from _common import PROCESSED, RAW
 CAPTION_MODEL = "claude-haiku-4-5"
 WORKERS = 8
 
-SYSTEM = """You are labeling a pair of "sibling cities" -- a European city and a North American city \
+SYSTEM_V1 = """You are labeling a pair of "sibling cities" -- a European city and a North American city \
 an algorithm identified as cross-country analogs -- for a general audience.
 
 You will be given both cities' encyclopedia leads. Write a single concise descriptive PHRASE (not a \
@@ -44,26 +44,105 @@ avoid vague filler like "vibrant, diverse city".
 - If they share little, give the most honest shared descriptor you can, even if broad.
 - Output only the phrase -- no preamble."""
 
+# V2 targets the failure modes the caption judge measured on V1 (scripts/judge_captions.py):
+# 83% of captions were one-sided (a concrete trait true of only one city), 28% inflated a suburb into
+# a "hub", and captions leaned toward the more richly-described city (usually the European one). The
+# fixes: enforce symmetry against the WEAKER lead, forbid scale inflation, and prefer an honestly
+# broad caption over a specific one-sided one.
+SYSTEM_V2 = """You are labeling a pair of "sibling cities" -- a European city and a North American city \
+an algorithm identified as cross-country analogs -- for a general audience.
+
+You are given both cities' encyclopedia leads. Write a single concise descriptive PHRASE (not a full \
+sentence; 20 words MAXIMUM) capturing character the two cities GENUINELY SHARE -- the kind of place \
+they both are. It must read as one description that is TRUE OF EACH city on its own.
+
+Hard rules:
+- Do NOT name either city, and do NOT start with "Both" or "Two". Write a noun phrase describing the \
+shared type.
+- SYMMETRY (most important): every trait you include must be clearly supported by BOTH leads. If a \
+trait -- an era ("medieval", "ancient"), an industry, a landmark, a role, a scale -- appears in only \
+one lead, you must NOT use it. Before finalizing, check each word against the WEAKER (less-detailed) \
+lead; if that city does not clearly have the trait, cut it.
+- SCALE HONESTY: describe each city at the scale its own lead supports. Do NOT upgrade a suburb, edge \
+city, satellite, or small town into a "hub", "major", "metropolis", or "regional center" it is not. \
+Use generic terms: call a capital "a capital city", never "a state capital".
+- SHARE LITTLE? STAY BROAD AND HONEST: if the leads reveal little genuine common character, give the \
+most honest shared descriptor you can, even if broad ("a mid-sized regional city", "a coastal city \
+shaped by tourism"). A broad but accurate caption is BETTER than a specific one that fits only one \
+city. Never manufacture shared richness by importing one city's specifics.
+- Do NOT default to the more richly-described city; the phrase must hold for the less-documented one too.
+- Be concrete ONLY about character both leads truly share (industry, geography, scale/role, historical \
+arc, culture); avoid vague filler like "vibrant, diverse city".
+- Output only the phrase -- no preamble."""
+
+# V3 keeps V2 and targets the two residuals the judge found on V2/Sonnet-5: (1) a new "capital-region /
+# capital-adjacent / regional capital / regional seat" hedge the model used to smuggle one city's
+# capital status into a fake shared framing, and (2) near-zero-overlap pairs where it still forced a
+# concrete trait instead of going honestly broad.
+SYSTEM_V3 = """You are labeling a pair of "sibling cities" -- a European city and a North American city \
+an algorithm identified as cross-country analogs -- for a general audience.
+
+You are given both cities' encyclopedia leads. Write a single concise descriptive PHRASE (not a full \
+sentence; 20 words MAXIMUM) capturing character the two cities GENUINELY SHARE -- the kind of place \
+they both are. It must read as one description that is TRUE OF EACH city on its own.
+
+Hard rules:
+- Do NOT name either city, and do NOT start with "Both" or "Two". Write a noun phrase describing the \
+shared type.
+- SYMMETRY (most important): every trait you include must be clearly supported by BOTH leads. If a \
+trait -- an era ("medieval", "ancient"), an industry, a landmark, a role, a scale -- appears in only \
+one lead, you must NOT use it. Before finalizing, check each word against the WEAKER (less-detailed) \
+lead; if that city does not clearly have the trait, cut it.
+- SCALE HONESTY: describe each city at the scale its own lead supports. Do NOT upgrade a suburb, edge \
+city, satellite, or small town into a "hub", "major", "metropolis", or "regional center" it is not.
+- NO CAPITAL/ADMINISTRATIVE HEDGING: describe the shared type as a "capital", "seat of government", or \
+"administrative center" ONLY if BOTH leads clearly give that role. If only one city is a capital or \
+administrative seat, drop that framing entirely. NEVER use bridging hedges like "capital-region", \
+"capital-adjacent", "capital-like", "regional capital", or "regional seat" to make one city's status \
+sound shared.
+- SHARE LITTLE? STAY BROAD AND HONEST: after cutting one-sided traits, if little concrete character \
+remains, that is fine -- write a short, plain, generic caption ("a mid-sized city on a river", "a \
+growing suburban city", "a coastal city shaped by tourism"). A broad but accurate caption is BETTER \
+than a specific one that fits only one city. Do NOT fill the gap with "hub", "capital", or \
+administrative language, and never manufacture shared richness by importing one city's specifics.
+- Do NOT default to the more richly-described city; the phrase must hold for the less-documented one too.
+- Be concrete ONLY about character both leads truly share (industry, geography, scale/role, historical \
+arc, culture); avoid vague filler like "vibrant, diverse city".
+- Output only the phrase -- no preamble."""
+
+PROMPTS = {"v1": SYSTEM_V1, "v2": SYSTEM_V2, "v3": SYSTEM_V3}
+
 client = anthropic.Anthropic(max_retries=5)
 
 
-def make_caption(eu_lead: str, na_lead: str) -> str:
+def make_caption(eu_lead: str, na_lead: str, *, model: str, system: str, effort: str | None) -> str:
+    # Haiku 4.5 has no effort/adaptive-thinking; stronger models get a scratchpad to verify each
+    # trait against BOTH leads (the symmetry check V2 asks for) before committing to the phrase.
+    if "haiku" in model:
+        kwargs = {"max_tokens": 160}
+    else:
+        kwargs = {
+            "max_tokens": 1200,
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": effort or "medium"},
+        }
     resp = client.messages.create(
-        model=CAPTION_MODEL,
-        max_tokens=160,
-        system=SYSTEM,
+        model=model,
+        system=system,
         messages=[
             {"role": "user", "content": f"European city:\n{eu_lead}\n\nNorth American city:\n{na_lead}"}
         ],
+        **kwargs,
     )
     return next(b.text for b in resp.content if b.type == "text").strip()
 
 
-def caption_pair(eu_qid, na_qid, eu_lead, na_lead, *, force):
-    path = RAW / "captions" / f"{eu_qid}__{na_qid}.txt"
+def caption_pair(eu_qid, na_qid, eu_lead, na_lead, *, model, system, effort, caption_key, force):
+    base = RAW / "captions" / caption_key if caption_key else RAW / "captions"
+    path = base / f"{eu_qid}__{na_qid}.txt"
     if path.exists() and not force:
         return (eu_qid, na_qid), path.read_text()
-    text = make_caption(eu_lead, na_lead)
+    text = make_caption(eu_lead, na_lead, model=model, system=system, effort=effort)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".txt.tmp")
     tmp.write_text(text)
@@ -81,6 +160,10 @@ def main() -> None:
     ap.add_argument("--model", default="nomic")
     ap.add_argument("--source", choices=["lead", "profile"], default="profile")
     ap.add_argument("--profile-key", default="haiku")
+    ap.add_argument("--caption-model", default=CAPTION_MODEL)
+    ap.add_argument("--caption-effort", default=None, help="effort for non-haiku caption models")
+    ap.add_argument("--prompt", choices=list(PROMPTS), default="v1")
+    ap.add_argument("--caption-key", default="", help="label; namespaces cache dir + output file (baseline = empty)")
     ap.add_argument("--force", action="store_true", help="re-caption even if cached")
     ap.add_argument("--workers", type=int, default=WORKERS)
     args = ap.parse_args()
@@ -93,12 +176,18 @@ def main() -> None:
         norm_pair(q, rec["group"], m["qid"])
         for q, rec in matches.items() for m in rec["matches"]
     })
-    print(f"{len(pairs)} unique European<->North American pairs to caption")
+    system = PROMPTS[args.prompt]
+    print(f"{len(pairs)} unique European<->North American pairs to caption "
+          f"(model={args.caption_model}, prompt={args.prompt}, key={args.caption_key or '(baseline)'})")
 
     results, done = {}, 0
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = [
-            ex.submit(caption_pair, euq, naq, lead[euq], lead[naq], force=args.force)
+            ex.submit(
+                caption_pair, euq, naq, lead[euq], lead[naq],
+                model=args.caption_model, system=system, effort=args.caption_effort,
+                caption_key=args.caption_key, force=args.force,
+            )
             for euq, naq in pairs
         ]
         for fut in as_completed(futs):
@@ -112,7 +201,8 @@ def main() -> None:
         for m in rec["matches"]:
             m["caption"] = results[norm_pair(q, rec["group"], m["qid"])]
 
-    out_path = PROCESSED / f"matches_{args.model}{suffix}_captioned.json"
+    cap = f"_{args.caption_key}" if args.caption_key else ""
+    out_path = PROCESSED / f"matches_{args.model}{suffix}_captioned{cap}.json"
     tmp = out_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(matches, indent=2, ensure_ascii=False))
     tmp.replace(out_path)
