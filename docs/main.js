@@ -15,6 +15,7 @@
 
   const DATA_URL = "data/atlantic-mirror.json";
   const WORLD_URL = "data/countries-50m.json";
+  const STATES_URL = "data/states-10m.json";   // US state borders (NA-card navigation aid)
 
   const CFG = {
     na: { group: "North America", title: "North America", rotate: [98, 0], parallels: [20, 60] },
@@ -31,7 +32,7 @@
 
   const S = {
     cities: {}, blocks: { na: [], eu: [] },
-    land: null, borders: null,
+    land: null, borders: null, naStates: null,
     P: {   // per-panel state (independent projection + zoom transform + quadtree)
       na: { proj: null, t: d3.zoomIdentity, quad: null, rect: null, zoom: null, layer: null, group: null },
       eu: { proj: null, t: d3.zoomIdentity, quad: null, rect: null, zoom: null, layer: null, group: null },
@@ -52,11 +53,12 @@
   init();
 
   async function init() {
-    const [data, world] = await Promise.all([d3.json(DATA_URL), d3.json(WORLD_URL)]);
+    const [data, world, statesTopo] = await Promise.all([d3.json(DATA_URL), d3.json(WORLD_URL), d3.json(STATES_URL)]);
     S.cities = data.cities;
     for (const [qid, c] of Object.entries(S.cities)) { c.qid = qid; S.blocks[panelKey(qid)].push(c); }
     S.land = topojson.feature(world, world.objects.land);
-    S.borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+    S.borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);         // country borders
+    S.naStates = topojson.mesh(statesTopo, statesTopo.objects.states, (a, b) => a !== b);  // US state borders
     document.querySelector(".hint__label").textContent = hoverCapable ? "Hover a city to begin" : "Tap a city to begin";
     buildScaffold();
     bindGlobal();
@@ -76,7 +78,8 @@
       P.group.append("rect").attr("class", "panel-bg").attr("rx", 12).attr("ry", 12);
       P.layer = P.group.append("g").attr("clip-path", `url(#clip-${key})`).append("g").attr("class", "zoom-layer");
       P.layer.append("path").attr("class", "land");
-      P.layer.append("path").attr("class", "borders");
+      P.layer.append("path").attr("class", "substate").attr("fill", "none");   // US states (NA only)
+      P.layer.append("path").attr("class", "borders").attr("fill", "none");    // country borders
       P.layer.append("g").attr("class", "dots");
       P.group.append("rect").attr("class", "panel-frame").attr("rx", 12).attr("ry", 12);
       P.group.append("text").attr("class", "panel-title");
@@ -185,6 +188,7 @@
   function drawPanel(key) {
     const P = S.P[key], path = d3.geoPath(P.proj);
     P.layer.select("path.land").datum(S.land).attr("d", path);
+    P.layer.select("path.substate").datum(key === "na" ? S.naStates : null).attr("d", path);
     P.layer.select("path.borders").datum(S.borders).attr("d", path);
     P.layer.select("g.dots").selectAll("circle").data(S.blocks[key], (d) => d.qid).join(
       (enter) => enter.append("circle").attr("class", "dot").style("vector-effect", "non-scaling-stroke")
@@ -285,7 +289,9 @@
   function renderLabels() {
     const sel = S.selected, cands = [];
     if (sel) {
-      cands.push({ qid: sel, role: "sel", fs: 15 });
+      // desktop: the info card sits at the dot and serves as its label, so skip it (it was overlapping the card).
+      // mobile: the card is a bottom sheet far from the dot, so keep the selected label on the map.
+      if (S.mode !== "side") cands.push({ qid: sel, role: "sel", fs: 15 });
       for (const m of S.cities[sel].matches) cands.push({ qid: m.qid, role: "match", fs: 13.5 });
     }
     const placed = [], out = [];
