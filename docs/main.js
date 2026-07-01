@@ -58,7 +58,7 @@
     for (const [qid, c] of Object.entries(S.cities)) { c.qid = qid; S.blocks[panelKey(qid)].push(c); }
     S.land = topojson.feature(world, world.objects.land);
     S.borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);         // country borders
-    S.naStates = topojson.mesh(statesTopo, statesTopo.objects.states, (a, b) => a !== b);  // US state borders
+    S.naStates = topojson.mesh(statesTopo, statesTopo.objects.states);  // US state borders (full mesh: keeps lake shores)
     document.querySelector(".hint__label").textContent = hoverCapable ? "Hover a city to begin" : "Tap a city to begin";
     buildScaffold();
     bindGlobal();
