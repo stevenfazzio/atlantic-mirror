@@ -9,9 +9,13 @@ the North America↔Europe pivot is merged (PR #1), so work on `main` now.
 Stages run in order 01 → 02 → 02b → 03 → 04 → 05 → 07 → 08, each cached/idempotent (re-runs skip done
 work; `--force` recomputes). Primary invocation uses `--source profile --profile-key haiku` for
 03–08 and `--model claude-haiku-4-5 --key haiku` for 02b — exact commands in README.md § Running.
+**Shipped captions:** stage 07 runs on Sonnet 5 with the v3 prompt (`--caption-model claude-sonnet-5
+--caption-effort medium --prompt v3 --caption-key sonnet5v3`), and stage 08 must get `--caption-key
+sonnet5v3` to export them; 07/08 *defaults* (no key) still rebuild the original Haiku/v1 baseline, so
+a re-run without those flags silently reverts the map to it.
 `ANTHROPIC_API_KEY` is required for 02b (distill) and 07 (caption); 08 (export web JSON) needs no key.
-Products: `data/processed/matches_nomic_profile_haiku_captioned.json` (full) and stage 08's slim
-`docs/data/atlantic-mirror.json` (what the web map loads).
+Products: `data/processed/matches_nomic_profile_haiku_captioned_sonnet5v3.json` (full) and stage 08's
+slim `docs/data/atlantic-mirror.json` (what the web map loads).
 
 ## Data safety — read before touching `data/`
 `data/` and `output/` are gitignored. `data/raw/` caches cost real money and time to regenerate
@@ -76,5 +80,12 @@ read as a *broken* map, so the deliberate call is two honest panels.
   + click-to-pin, mobile = reserved-strip peek with a teaser. Don't re-fuse the maps or re-add a seam.
 - Distillation supersedes every name-collision fix; Haiku ≈ Opus, so Haiku is primary. **Held off by
   the user:** Opus / full-Wikipedia-page / longer-profile distillation experiments.
+- **Captions (07) = Sonnet 5 + symmetry-enforcing v3 prompt (shipped 2026-07-01, commit `ac63eba`).**
+  Haiku/v1 captions were one-sided (a concrete trait true of only one city of the pair) ~84% of the
+  time → ~52% on Sonnet-5/v3, and shorter. `scripts/judge_captions.py` (Opus LLM-as-judge: per-claim
+  both/eu-only/na-only tagging + scale/invention/specificity axes, blind to cosine) is the measurement
+  rig, reusable for embedding-model experiments. The old 'call a capital "a capital city", never "a
+  state capital"' rule was **intentionally dropped** in v3 — specific capital types are fine when
+  accurate for both cities; don't re-add a blanket ban.
 - Dropped: 1:1 bijection, convex reconstruction, MMR, output-surgery / masking / name-subspace
   erasure (`scripts/prototype_*.py`).

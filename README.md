@@ -64,14 +64,22 @@ uv run python scripts/02b_distill.py            --model claude-haiku-4-5 --key h
 uv run python scripts/03_embed.py               --source profile --profile-key haiku
 uv run python scripts/04_neutralize_country.py  --source profile --profile-key haiku
 uv run python scripts/05_match.py               --source profile --profile-key haiku
-uv run python scripts/07_caption.py             --source profile --profile-key haiku
-uv run python scripts/08_export_web.py          --source profile --profile-key haiku
+uv run python scripts/07_caption.py             --source profile --profile-key haiku \
+    --caption-model claude-sonnet-5 --caption-effort medium --prompt v3 --caption-key sonnet5v3
+uv run python scripts/08_export_web.py          --source profile --profile-key haiku --caption-key sonnet5v3
 ```
 
-Products: `data/processed/matches_nomic_profile_haiku_captioned.json` (full — every city keyed by
-Wikidata QID with its group, real country, coordinates, and top-3 captioned analogs) and stage 08's
-slim `docs/data/atlantic-mirror.json`, which the web map loads. Add `--force` to any stage to ignore
-its cache.
+Products: `data/processed/matches_nomic_profile_haiku_captioned_sonnet5v3.json` (full — every city
+keyed by Wikidata QID with its group, real country, coordinates, and top-3 captioned analogs) and
+stage 08's slim `docs/data/atlantic-mirror.json`, which the web map loads. Add `--force` to any stage
+to ignore its cache.
+
+Captions (07) run on **Sonnet 5** with the symmetry-enforcing **v3** prompt (`--caption-key
+sonnet5v3`); the stage *defaults* (`--caption-model claude-haiku-4-5 --prompt v1`, no key) reproduce
+the original Haiku baseline, kept for comparison — so pass the flags above, plus `--caption-key
+sonnet5v3` to stage 08, to rebuild the shipped map, or a re-run silently reverts to the Haiku
+captions. `scripts/judge_captions.py` is an Opus LLM-as-judge scoring caption honesty (one-sided
+claims, scale inflation) that drove the v1→v3 iteration.
 
 ## Web map
 
