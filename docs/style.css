@@ -138,6 +138,12 @@ body::before {   /* printed-paper tooth */
   font-family: var(--sans); font-size: 13px; color: var(--ink); transition: width .2s ease;
 }
 .search__input::placeholder { color: var(--ink-faint); }
+.search__clear {
+  flex: none; display: none; place-items: center; width: 18px; height: 18px; padding: 0;
+  border: none; background: none; color: var(--ink-faint); font-size: 18px; line-height: 1; cursor: pointer;
+}
+.search__clear:hover { color: var(--ink); }
+.search--has-query .search__clear { display: grid; }   /* shown only when there's text to clear */
 .search__results {
   position: absolute; top: calc(100% + 7px); left: 0; right: 0; margin: 0; padding: 5px;
   list-style: none; background: var(--paper-card); border: 1px solid var(--hair);

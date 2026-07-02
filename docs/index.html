@@ -15,7 +15,7 @@
 
   <!-- Bump ?v= whenever style.css / main.js change: GitHub Pages serves them with max-age=600,
        so returning visitors otherwise get stale assets against a fresh index.html (bit us 2026-07-02). -->
-  <link rel="stylesheet" href="style.css?v=202607020956" />
+  <link rel="stylesheet" href="style.css?v=202607021007" />
 </head>
 <body>
   <div id="app">
@@ -40,6 +40,7 @@
         <input id="search-input" class="search__input" type="text" role="combobox"
                aria-controls="search-results" aria-expanded="false" aria-autocomplete="list"
                autocomplete="off" spellcheck="false" placeholder="Find a city&hellip;" aria-label="Find a city" />
+        <button type="button" class="search__clear" aria-label="Clear search and selection">&times;</button>
         <ul id="search-results" class="search__results" role="listbox" aria-label="City search results" hidden></ul>
       </div>
 
@@ -69,6 +70,6 @@
 
   <script src="vendor/d3.v7.min.js"></script>
   <script src="vendor/topojson-client.v3.min.js"></script>
-  <script src="main.js?v=202607020956" defer></script>
+  <script src="main.js?v=202607021007" defer></script>
 </body>
 </html>

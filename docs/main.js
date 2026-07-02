@@ -373,10 +373,12 @@
     const input = document.getElementById("search-input");
     const list = document.getElementById("search-results");
     const toggle = el.querySelector(".search__toggle");
+    const clearBtn = el.querySelector(".search__clear");
     let results = [], active = -1;
 
     const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; };
     const collapseMobile = () => { if (S.mode !== "side") el.classList.remove("search--open"); };
+    const syncClear = () => el.classList.toggle("search--has-query", input.value.length > 0);   // show the × only when there's text
 
     function run(raw) {
       const q = fold(raw.trim());
@@ -409,13 +411,20 @@
       list.children[active].scrollIntoView({ block: "nearest" });
     }
     function choose(qid) {
-      input.value = S.cities[qid].city;
+      input.value = S.cities[qid].city; syncClear();
       close(); collapseMobile(); input.blur();
       select(qid, true);        // pin, exactly like a click
       focusCity(qid);           // then bring it into a clear reading position
     }
+    // The × (and Escape): wipe the box AND the current selection, reset both panels to fit — a clean
+    // slate so you can search again without backspacing through the last city's name.
+    function clearAll() {
+      input.value = ""; syncClear(); results = []; close();
+      S.pinned = false; clearSelection();
+      for (const key of ["na", "eu"]) S.P[key].group.transition().duration(450).call(S.P[key].zoom.transform, d3.zoomIdentity);
+    }
 
-    input.addEventListener("input", () => run(input.value));
+    input.addEventListener("input", () => { syncClear(); run(input.value); });
     input.addEventListener("focus", () => { if (input.value.trim()) run(input.value); });
     input.addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
@@ -424,7 +433,7 @@
       else if (e.key === "Escape") {
         e.stopPropagation();    // keep the global Escape from clearing the pinned city underneath
         if (!list.hidden) close();
-        else { input.value = ""; input.blur(); collapseMobile(); }
+        else { clearAll(); input.blur(); collapseMobile(); }
       }
     });
     list.addEventListener("mousedown", (e) => {     // mousedown fires before the input's blur
@@ -436,6 +445,7 @@
       if (S.mode !== "side") el.classList.toggle("search--open");
       input.focus();
     });
+    clearBtn.addEventListener("click", () => { clearAll(); input.focus(); });
     document.addEventListener("pointerdown", (e) => { if (!el.contains(e.target)) close(); });
   }
 
