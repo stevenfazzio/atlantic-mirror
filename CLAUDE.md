@@ -68,17 +68,20 @@ read as a *broken* map, so the deliberate call is two honest panels.
   reading a loose pairing as a "twin" undercut perceived quality. Don't revert UI copy to "twin." (The
   sister-cities/town-twinning conceit stays; "twin" survives only as internal shorthand + the
   `judge_pairs` "twin-quality" metric name.)
-- **City search** (added 2026-07-02): floating top-centre pill (collapses to a magnifier on mobile)
-  over a diacritic-folded index of all 500 cities; results disambiguate by **country + continent**
-  (e.g. Vancouver BC vs Vancouver WA). Choosing pins like a click, then **recenters that panel** so the
-  dot clears the info card (`focusCity`: scale 1.7, biased toward the gutter since the card sits on the
-  outer side; edge cities clamped to d3-zoom's own pan bounds via `clampTransform`) and **resets the
-  opposite panel to fit** so all three counterparts + arcs stay visible. Because of the pill, the
-  **panel titles moved to bottom-left** (don't move them back to the top). With four ways to pick a city
-  now (hover/click/tap/search), UI copy is gesture-agnostic — **"Choose a city…"** (dek, hint, meta);
-  the hint no longer branches on hover-capability. An **× in the pill (shown only when there's text) and
-  Escape** wipe the box **and** the selection and reset both panels to fit — a clean slate for searching
-  again without backspacing through the last city's name.
+- **City search** (added 2026-07-02): a floating top-centre pill on desktop; on **mobile a persistent
+  full-width bar in a reserved top strip** (`--search-h`) — no collapse (an animated collapse janked on
+  real phones). Matches a diacritic-folded, **word-start** index of all 500 cities ("york" → New York,
+  not Seattle) with results disambiguated by **country + continent** (Vancouver BC vs WA). Choosing pins
+  like a click, then **recenters that panel** so the dot clears the info card (`focusCity`: scale 1.7,
+  gutter-biased; edge cities clamped to d3-zoom's pan bounds via `clampTransform`) and **resets the
+  opposite panel to fit** so all three counterparts + arcs stay visible. **Panel titles are bottom-left**
+  (cleared the top bar — don't move them back). Copy is gesture-agnostic — **"Choose a city…"** (dek,
+  hint, meta). An **× (shown only when there's text) and Escape** wipe the box **and** the selection and
+  reset both panels — a clean slate for the next search.
+- **Mobile launcher:** the otherwise-empty bottom strip (when nothing's selected) holds example-city
+  **chips** (`buildLauncher`, currently Munich/Detroit/Lisbon/Kraków) — a one-tap way in on a phone where
+  the dots are tiny; a chip pins + recenters like a search pick. Hidden on desktop and once a city is
+  selected (the peek sheet takes the strip).
 - **Deploy cache-busting:** GitHub Pages serves `style.css`/`main.js` with `max-age=600`, and there's no
   build step to hash filenames — so `index.html` loads them with a `?v=<datetimestamp>` query. **Bump
   that `?v=` on both links whenever you change style.css or main.js**, or returning visitors get a stale

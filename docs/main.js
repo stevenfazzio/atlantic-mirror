@@ -63,6 +63,7 @@
     bindGlobal();
     render();
     buildSearch();
+    buildLauncher();
     window.addEventListener("resize", debounce(onResize, 160));
   }
 
@@ -368,6 +369,7 @@
     const index = Object.entries(S.cities).map(([qid, c]) => ({
       qid, key: panelKey(qid), rank: c.rank, name: c.city, country: c.country,
       fName: fold(c.city), fCountry: fold(c.country),
+      words: fold(c.city).split(/[\s,\-.]+/).filter(Boolean),   // for word-start matching
     }));
     const el = document.getElementById("search");
     const input = document.getElementById("search-input");
@@ -377,7 +379,6 @@
     let results = [], active = -1;
 
     const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; };
-    const collapseMobile = () => { if (S.mode !== "side") el.classList.remove("search--open"); };
     const syncClear = () => el.classList.toggle("search--has-query", input.value.length > 0);   // show the × only when there's text
 
     function run(raw) {
@@ -385,7 +386,10 @@
       if (!q) { results = []; close(); return; }
       const scored = [];
       for (const it of index) {
-        const s = it.fName.startsWith(q) ? 0 : it.fName.includes(q) ? 1 : it.fCountry.includes(q) ? 2 : -1;
+        // full-name prefix, then any word-start (so "york" → New York, but "at" no longer → Seattle), then country
+        const s = it.fName.startsWith(q) ? 0
+          : it.words.some((w) => w.startsWith(q)) ? 1
+          : it.fCountry.startsWith(q) ? 2 : -1;
         if (s >= 0) scored.push({ it, s });
       }
       scored.sort((a, b) => a.s - b.s || a.it.rank - b.it.rank);   // best match kind first, then most prominent
@@ -412,7 +416,7 @@
     }
     function choose(qid) {
       input.value = S.cities[qid].city; syncClear();
-      close(); collapseMobile(); input.blur();
+      close(); input.blur();
       select(qid, true);        // pin, exactly like a click
       focusCity(qid);           // then bring it into a clear reading position
     }
@@ -433,7 +437,7 @@
       else if (e.key === "Escape") {
         e.stopPropagation();    // keep the global Escape from clearing the pinned city underneath
         if (!list.hidden) close();
-        else { clearAll(); input.blur(); collapseMobile(); }
+        else { clearAll(); input.blur(); }
       }
     });
     list.addEventListener("mousedown", (e) => {     // mousedown fires before the input's blur
@@ -441,12 +445,24 @@
       e.preventDefault();
       choose(results[+li.dataset.i].qid);
     });
-    toggle.addEventListener("click", () => {
-      if (S.mode !== "side") el.classList.toggle("search--open");
-      input.focus();
-    });
+    toggle.addEventListener("click", () => { input.focus(); });
     clearBtn.addEventListener("click", () => { clearAll(); input.focus(); });
     document.addEventListener("pointerdown", (e) => { if (!el.contains(e.target)) close(); });
+  }
+
+  // Example-city chips that fill the otherwise-empty bottom strip on mobile — a one-tap way in.
+  function buildLauncher() {
+    const wrap = document.querySelector("#launcher .launcher__chips");
+    if (!wrap) return;
+    const byName = (name) => Object.values(S.cities).find((c) => fold(c.city) === fold(name));
+    for (const name of ["Munich", "Detroit", "Lisbon", "Kraków"]) {
+      const c = byName(name);
+      if (!c) continue;
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = c.city;
+      b.addEventListener("click", () => { select(c.qid, true); focusCity(c.qid); });   // pin + recenter, like a search pick
+      wrap.appendChild(b);
+    }
   }
 
   // Search-select: recenter the chosen city's panel so its dot lands clear of the info card

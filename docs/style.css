@@ -32,6 +32,7 @@
   --sans:  "Archivo", ui-sans-serif, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --edge: clamp(14px, 3.2vw, 34px);
   --peek-h: 190px;    /* mobile: reserved bottom strip for the collapsed peek sheet */
+  --search-h: 56px;   /* mobile: reserved top strip for the persistent search bar */
 }
 
 * { box-sizing: border-box; }
@@ -162,6 +163,22 @@ body::before {   /* printed-paper tooth */
 }
 .search__empty { padding: 8px 9px; font-size: 12px; font-style: italic; color: var(--ink-faint); }
 
+/* ---------- Launcher (mobile: chips in the otherwise-empty bottom strip) ---- */
+#launcher {
+  display: none;   /* desktop: never; mobile idle: shown (see media query) */
+  position: absolute; left: var(--edge); right: var(--edge); bottom: 0; height: var(--peek-h);
+  flex-direction: column; align-items: center; justify-content: center; gap: 11px; text-align: center;
+}
+.launcher__label { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.launcher__chips { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; }
+.chip {
+  font-family: var(--serif); font-size: 15px; padding: 7px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--hair); background: color-mix(in srgb, var(--paper-card) 82%, transparent);
+  color: var(--ink); transition: border-color .15s ease, background .15s ease;
+}
+.chip:hover { border-color: var(--ink-faint); background: var(--paper-card); }
+.chip:active { transform: translateY(1px); }
+
 /* ---------- Zoom controls ----------------------------------------------- */
 #controls {
   position: absolute; right: clamp(12px, 2.4vw, 22px); top: clamp(12px, 3vh, 22px);
@@ -264,16 +281,15 @@ body::before {   /* printed-paper tooth */
   .masthead__rule { display: none; }
   .dek { justify-self: start; text-align: left; }
 
-  /* Search collapses to just the magnifier until tapped. */
-  .search:not(.search--open) { gap: 0; padding: 8px; }
-  .search:not(.search--open) .search__toggle { cursor: pointer; }
-  .search:not(.search--open) .search__input { width: 0; }
-  /* Animate the OPEN only; collapse snaps shut. A width transition janks on real mobile because it
-     reflows on the main thread while the zoom re-render + soft-keyboard-dismiss resize are competing. */
-  .search--open .search__input { width: min(58vw, 230px); transition: width .2s ease; }
+  /* Persistent full-width search bar in the reserved top strip (no collapse → no collapse-jank). */
+  .search { left: var(--edge); right: var(--edge); top: 8px; transform: none; padding: 8px 13px; }
+  .search__input { flex: 1 1 auto; width: auto; }
 
-  #map { height: calc(100% - var(--peek-h)); }     /* reserve the strip so the collapsed peek never covers a map */
-  .hint { bottom: calc(var(--peek-h) / 2 - 16px); }
+  /* Push the maps between a reserved top strip (search bar) and bottom strip (peek sheet / launcher). */
+  #map { position: relative; top: var(--search-h); height: calc(100% - var(--peek-h) - var(--search-h)); }
+  #controls { top: calc(var(--search-h) + 12px); }     /* drop the reset below the search bar, onto the map */
+  .hint { display: none; }                             /* replaced by the chip launcher on mobile */
+  #app:not(.has-selection) #launcher { display: flex; }
 
   .panel {
     left: 0; right: 0; top: auto; bottom: 0; width: auto; height: auto;

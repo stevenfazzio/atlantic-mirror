@@ -15,7 +15,7 @@
 
   <!-- Bump ?v= whenever style.css / main.js change: GitHub Pages serves them with max-age=600,
        so returning visitors otherwise get stale assets against a fresh index.html (bit us 2026-07-02). -->
-  <link rel="stylesheet" href="style.css?v=202607021027" />
+  <link rel="stylesheet" href="style.css?v=202607021057" />
 </head>
 <body>
   <div id="app">
@@ -48,6 +48,11 @@
         <span class="hint__dot"></span> <span class="hint__label">Choose a city to begin</span>
       </p>
 
+      <div id="launcher" aria-hidden="true">
+        <span class="launcher__label">Try</span>
+        <span class="launcher__chips"><!-- chips filled by main.js --></span>
+      </div>
+
       <div id="controls" aria-hidden="true">
         <button type="button" data-zoom="reset" title="Reset both maps" aria-label="Reset both maps">&#8634;</button>
       </div>
@@ -70,6 +75,6 @@
 
   <script src="vendor/d3.v7.min.js"></script>
   <script src="vendor/topojson-client.v3.min.js"></script>
-  <script src="main.js?v=202607021027" defer></script>
+  <script src="main.js?v=202607021057" defer></script>
 </body>
 </html>
