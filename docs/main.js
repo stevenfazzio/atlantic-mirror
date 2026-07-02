@@ -455,7 +455,7 @@
     const wrap = document.querySelector("#launcher .launcher__chips");
     if (!wrap) return;
     const byName = (name) => Object.values(S.cities).find((c) => fold(c.city) === fold(name));
-    for (const name of ["Munich", "Detroit", "Lisbon", "Kraków"]) {
+    for (const name of ["Venice", "Madrid", "Detroit", "Boston"]) {
       const c = byName(name);
       if (!c) continue;
       const b = document.createElement("button");
