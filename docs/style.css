@@ -135,7 +135,7 @@ body::before {   /* printed-paper tooth */
 .search__toggle svg { display: block; }
 .search__input {
   width: 200px; border: none; background: none; outline: none; padding: 1px 0;
-  font-family: var(--sans); font-size: 13px; color: var(--ink); transition: width .2s ease;
+  font-family: var(--sans); font-size: 13px; color: var(--ink);
 }
 .search__input::placeholder { color: var(--ink-faint); }
 .search__clear {
@@ -268,7 +268,9 @@ body::before {   /* printed-paper tooth */
   .search:not(.search--open) { gap: 0; padding: 8px; }
   .search:not(.search--open) .search__toggle { cursor: pointer; }
   .search:not(.search--open) .search__input { width: 0; }
-  .search--open .search__input { width: min(58vw, 230px); }
+  /* Animate the OPEN only; collapse snaps shut. A width transition janks on real mobile because it
+     reflows on the main thread while the zoom re-render + soft-keyboard-dismiss resize are competing. */
+  .search--open .search__input { width: min(58vw, 230px); transition: width .2s ease; }
 
   #map { height: calc(100% - var(--peek-h)); }     /* reserve the strip so the collapsed peek never covers a map */
   .hint { bottom: calc(var(--peek-h) / 2 - 16px); }
