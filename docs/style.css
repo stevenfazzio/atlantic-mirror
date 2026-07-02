@@ -86,10 +86,14 @@ body::before {   /* printed-paper tooth */
 /* Dots — fill & opacity here (transitioned); radius (by prominence) driven in JS. */
 .dot { fill: var(--dot); stroke: var(--surface); stroke-width: 0.5px; opacity: 0.85;
        transition: fill .18s ease, opacity .2s ease; }
-.is-selecting .dot        { opacity: 0.3; }
+/* Unselected dots keep their normal weight while selecting — the vermilion/teal dots
+   and the arcs carry the emphasis; fading everything else just made the map harder to read. */
 .is-selecting .dot--match { opacity: 1; fill: var(--match); stroke: var(--paper-card); stroke-width: 0.9px; }
 .is-selecting .dot--sel   { opacity: 1; fill: var(--sel);   stroke: var(--paper-card); stroke-width: 1px; }
 
+/* Overlays are decorative — never intercept the pointer. An arc origin sits on the
+   selected dot's centre, so a hittable arc creates a dead spot for hover right there. */
+.arcs, .labels { pointer-events: none; }
 .arc { fill: none; stroke: var(--match); stroke-width: 1.5px; stroke-linecap: round; opacity: 0.55; }
 
 /* On-map labels: only the selected city and its counterparts. */
