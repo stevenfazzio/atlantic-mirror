@@ -90,6 +90,24 @@ light up on the opposite card, with an arc to each and a card of captions — on
 written to fit *both* cities. Regenerate its data with stage 08, then preview locally with
 `python3 -m http.server -d docs` (open `http://127.0.0.1:8000`).
 
+## Evaluation
+
+Grading a task with **no ground truth** needed its own toolkit — offline diagnostics (not pipeline
+stages), all cached/resumable:
+
+- `judge_captions.py` — Opus LLM-as-judge scoring caption honesty (one-sided claims, scale inflation);
+  drove the v1→v3 caption iteration.
+- `judge_pairs.py` — blind, order-randomized **head-to-head** twin-quality judge (a judge sees one home
+  city and two candidate twins and picks the better); the primary metric for embedding/matching choices.
+- `lineup_eval.py` — a **referring-expression** metric: score a caption by whether it can re-identify
+  its own cities out of a look-alike lineup (leads provided, so it measures the caption, not city fame).
+
+What they showed: text embedding + distillation drive most of the twin quality; neutralization and CSLS
+trade a little per-pair quality to keep the map diverse (un-hubbed); the embedding *model* itself isn't
+the lever; and a city's "twin" is really one representative of a *cloud* of comparable analogs (hence
+three per city). Ablation flags on stages 02b/03/05/07 (`--prompt`, `--model`, `--method`, `--rank`,
+`--sample`) drive these studies; their defaults reproduce the shipped map.
+
 ## Method notes & dropped approaches
 
 - **Prominence, not population.** City-proper population is administratively inconsistent across
