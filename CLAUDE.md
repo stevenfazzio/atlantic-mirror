@@ -68,6 +68,15 @@ read as a *broken* map, so the deliberate call is two honest panels.
   reading a loose pairing as a "twin" undercut perceived quality. Don't revert UI copy to "twin." (The
   sister-cities/town-twinning conceit stays; "twin" survives only as internal shorthand + the
   `judge_pairs` "twin-quality" metric name.)
+- **City search** (added 2026-07-02): floating top-centre pill (collapses to a magnifier on mobile)
+  over a diacritic-folded index of all 500 cities; results disambiguate by **country + continent**
+  (e.g. Vancouver BC vs Vancouver WA). Choosing pins like a click, then **recenters that panel** so the
+  dot clears the info card (`focusCity`: scale 1.7, biased toward the gutter since the card sits on the
+  outer side; edge cities clamped to d3-zoom's own pan bounds via `clampTransform`) and **resets the
+  opposite panel to fit** so all three counterparts + arcs stay visible. Because of the pill, the
+  **panel titles moved to bottom-left** (don't move them back to the top). With four ways to pick a city
+  now (hover/click/tap/search), UI copy is gesture-agnostic — **"Choose a city…"** (dek, hint, meta);
+  the hint no longer branches on hover-capability.
 
 > Scope note, so this doesn't get re-poisoned: "no arcs" was a shelved intra-Europe feature (the
 > transatlantic arcs above are wanted); "no numbers / no colour scale" meant the specific Plotly cosine
