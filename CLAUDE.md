@@ -137,7 +137,12 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
   Richer profiles don't compound (opusrich flat on qwen3 too — no embedder×distillation synergy).
 - Neutralization is a quality×diversity tradeoff (raw_pca hubby / leace over-spread / **centroid the
   balance**); the ablation ladder shows each stage earns its keep on a different axis (distill→character;
-  neutralize/CSLS→un-hub the map). Matches are **cloud-not-soulmate** — swap the distiller and the #1
+  neutralize/CSLS→un-hub the map). **But the grounded lineup grades that ladder differently (2026-07-02):**
+  +distill is the pair judge's *peak* (72% win-rate) yet a lineup *dip* (55% top-1), while +neutralize/+CSLS
+  are the lineup's *best* rungs (61%) — distill matches on abstract character (more generic shared captions →
+  less discriminable), neutralize/CSLS spread to distinctive targets (sharper captions). The two metrics
+  reward **different axes** (twin-similarity vs caption-discriminability), not just different sensitivities
+  (`blog-assets/ablation_ladder_both.html`, built via `ladder_lineup.py`). Matches are **cloud-not-soulmate** — swap the distiller and the #1
   twin moves but stays in the old ranking's top ~8%, so the matcher identifies an analog *neighborhood*,
   not a unique twin (why the map shows three).
 - **Captions (07) = Sonnet 5 + symmetry-enforcing v3 prompt (shipped 2026-07-01, commit `ac63eba`).**
