@@ -77,6 +77,10 @@ read as a *broken* map, so the deliberate call is two honest panels.
   **panel titles moved to bottom-left** (don't move them back to the top). With four ways to pick a city
   now (hover/click/tap/search), UI copy is gesture-agnostic — **"Choose a city…"** (dek, hint, meta);
   the hint no longer branches on hover-capability.
+- **Deploy cache-busting:** GitHub Pages serves `style.css`/`main.js` with `max-age=600`, and there's no
+  build step to hash filenames — so `index.html` loads them with a `?v=<datetimestamp>` query. **Bump
+  that `?v=` on both links whenever you change style.css or main.js**, or returning visitors get a stale
+  JS/CSS against a fresh index.html (search unstyled, titles wrong, JS dead — happened 2026-07-02).
 
 > Scope note, so this doesn't get re-poisoned: "no arcs" was a shelved intra-Europe feature (the
 > transatlantic arcs above are wanted); "no numbers / no colour scale" meant the specific Plotly cosine
