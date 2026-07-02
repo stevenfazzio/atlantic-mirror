@@ -70,6 +70,12 @@ def main() -> None:
     ap.add_argument(
         "--method", default="centroid", help="representation: centroid | leace | raw_pca"
     )
+    ap.add_argument(
+        "--rank",
+        default="csls",
+        choices=["csls", "cosine"],
+        help="ranking score (csls = hubness-corrected, shipped; cosine = plain, for ablations)",
+    )
     args = ap.parse_args()
 
     suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
@@ -87,8 +93,9 @@ def main() -> None:
     eu_name, eu_qid = eu["city"].to_numpy(), eu["qid"].to_numpy()
     na_name, na_qid = na["city"].to_numpy(), na["qid"].to_numpy()
 
-    csls = csls_matrix(eu_n, na_n, CSLS_NBRS)  # eu x na; ranking (hubness-corrected)
-    cos = eu_n @ na_n.T  # cosine for display weights (symmetric across directions)
+    csls = csls_matrix(eu_n, na_n, CSLS_NBRS)  # eu x na; hubness-corrected
+    cos = eu_n @ na_n.T  # plain cosine (also the stored display weight, both directions)
+    rank_mat = csls if args.rank == "csls" else cos  # what top-n is chosen by
 
     records: dict[str, dict] = {}
 
@@ -103,7 +110,7 @@ def main() -> None:
         }
 
     for i in range(len(eu)):  # Europe -> North America (top per row)
-        top = np.argsort(-csls[i])[:N_OUT]
+        top = np.argsort(-rank_mat[i])[:N_OUT]
         add(
             eu.iloc[i],
             [
@@ -116,7 +123,7 @@ def main() -> None:
             ],
         )
     for j in range(len(na)):  # North America -> Europe (top per column)
-        top = np.argsort(-csls[:, j])[:N_OUT]
+        top = np.argsort(-rank_mat[:, j])[:N_OUT]
         add(
             na.iloc[j],
             [
@@ -138,19 +145,20 @@ def main() -> None:
     for q in REPORT_EU:
         if q in eu_ix:
             i = eu_ix[q]
-            top = np.argsort(-csls[i])[:N_OUT]
+            top = np.argsort(-rank_mat[i])[:N_OUT]
             print(f"  {q:18s} -> " + ", ".join(f"{na_name[j]} ({cos[i, j]:.2f})" for j in top))
     print("\nNorth America -> Europe:")
     for q in REPORT_NA:
         if q in na_ix:
             j = na_ix[q]
-            top = np.argsort(-csls[:, j])[:N_OUT]
+            top = np.argsort(-rank_mat[:, j])[:N_OUT]
             print(f"  {q:18s} -> " + ", ".join(f"{eu_name[i]} ({cos[i, j]:.2f})" for i in top))
 
-    # centroid (the shipped default) keeps the bare path so 06/07/08 are unaffected; other methods
-    # get a tag so a method A/B (stage-05 --method) doesn't overwrite the default.
+    # centroid + csls (the shipped default) keep the bare path so 06/07/08 are unaffected; other
+    # method/rank choices get a tag so an ablation never overwrites the default.
     method_tag = "" if args.method == "centroid" else f"_{args.method}"
-    out_path = PROCESSED / f"matches_{args.model}{suffix}{method_tag}.json"
+    rank_tag = "" if args.rank == "csls" else "_cos"
+    out_path = PROCESSED / f"matches_{args.model}{suffix}{method_tag}{rank_tag}.json"
     tmp = out_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(records, indent=2, ensure_ascii=False))
     tmp.replace(out_path)
