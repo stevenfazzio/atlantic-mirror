@@ -121,6 +121,41 @@ body::before {   /* printed-paper tooth */
 }
 #app.has-selection .hint { opacity: 0; transform: translateX(-50%) translateY(6px); pointer-events: none; }
 
+/* ---------- Search ------------------------------------------------------- */
+.search {
+  position: absolute; top: clamp(12px, 3vh, 22px); left: 50%; transform: translateX(-50%);
+  z-index: 6; display: flex; align-items: center; gap: 7px;
+  padding: 6px 13px; border: 1px solid var(--hair); border-radius: 999px;
+  background: color-mix(in srgb, var(--paper-card) 86%, transparent); backdrop-filter: blur(3px);
+}
+.search__toggle {
+  flex: none; display: grid; place-items: center; width: 18px; height: 18px;
+  padding: 0; border: none; background: none; color: var(--ink-faint); cursor: text;
+}
+.search__toggle svg { display: block; }
+.search__input {
+  width: 200px; border: none; background: none; outline: none; padding: 1px 0;
+  font-family: var(--sans); font-size: 13px; color: var(--ink); transition: width .2s ease;
+}
+.search__input::placeholder { color: var(--ink-faint); }
+.search__results {
+  position: absolute; top: calc(100% + 7px); left: 0; right: 0; margin: 0; padding: 5px;
+  list-style: none; background: var(--paper-card); border: 1px solid var(--hair);
+  border-radius: 12px; box-shadow: var(--shadow); max-height: min(46vh, 340px); overflow-y: auto;
+}
+.search__results[hidden] { display: none; }
+.search__opt {
+  display: flex; align-items: baseline; gap: 8px; padding: 7px 9px; border-radius: 8px; cursor: pointer;
+}
+.search__opt[aria-selected="true"] { background: color-mix(in srgb, var(--match) 12%, var(--paper-card)); }
+.search__opt-city { font-family: var(--serif); font-weight: 500; font-size: 14px; color: var(--ink); }
+.search__opt-country { font-size: 11px; color: var(--ink-soft); }
+.search__opt-tag {
+  margin-left: auto; align-self: center; font-size: 8.5px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink-faint); border: 1px solid var(--hair); border-radius: 5px; padding: 2px 5px; white-space: nowrap;
+}
+.search__empty { padding: 8px 9px; font-size: 12px; font-style: italic; color: var(--ink-faint); }
+
 /* ---------- Zoom controls ----------------------------------------------- */
 #controls {
   position: absolute; right: clamp(12px, 2.4vw, 22px); top: clamp(12px, 3vh, 22px);
@@ -222,6 +257,12 @@ body::before {   /* printed-paper tooth */
   .masthead { grid-template-columns: 1fr; gap: 4px; }
   .masthead__rule { display: none; }
   .dek { justify-self: start; text-align: left; }
+
+  /* Search collapses to just the magnifier until tapped. */
+  .search:not(.search--open) { gap: 0; padding: 8px; }
+  .search:not(.search--open) .search__toggle { cursor: pointer; }
+  .search:not(.search--open) .search__input { width: 0; }
+  .search--open .search__input { width: min(58vw, 230px); }
 
   #map { height: calc(100% - var(--peek-h)); }     /* reserve the strip so the collapsed peek never covers a map */
   .hint { bottom: calc(var(--peek-h) / 2 - 16px); }

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Atlantic Mirror — a character map between North America and Europe</title>
-  <meta name="description" content="Hover a city on either shore and meet the cities most like it in character on the other. 500 cities, matched on what kind of place they are — not their names." />
+  <meta name="description" content="Choose a city on either shore and meet the cities most like it in character on the other. 500 cities, matched on what kind of place they are — not their names." />
 
   <!-- Type: a literary serif + a grotesque. Google Fonts is the only runtime network call;
        everything else (data, map, libraries) is vendored locally, and the stack degrades
@@ -23,7 +23,7 @@
         <span class="masthead__rule" aria-hidden="true"></span>
       </div>
       <p class="dek">
-        What&rsquo;s the North American Munich? Touch a city on either shore and meet its
+        What&rsquo;s the North American Munich? Choose a city on either shore and meet its
         character counterparts <em>across the ocean</em> &mdash; matched on the kind of place each is.
       </p>
     </header>
@@ -31,8 +31,18 @@
     <main id="stage">
       <svg id="map" role="img" aria-label="A composite map: North American cities on one side, European cities on the other, with the Atlantic cropped out. Selecting a city highlights its three closest character analogs on the opposite continent."></svg>
 
+      <div id="search" class="search" role="search">
+        <button type="button" class="search__toggle" aria-label="Search for a city">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>
+        </button>
+        <input id="search-input" class="search__input" type="text" role="combobox"
+               aria-controls="search-results" aria-expanded="false" aria-autocomplete="list"
+               autocomplete="off" spellcheck="false" placeholder="Find a city&hellip;" aria-label="Find a city" />
+        <ul id="search-results" class="search__results" role="listbox" aria-label="City search results" hidden></ul>
+      </div>
+
       <p id="hint" class="hint" aria-hidden="true">
-        <span class="hint__dot"></span> <span class="hint__label">Hover a city to begin</span>
+        <span class="hint__dot"></span> <span class="hint__label">Choose a city to begin</span>
       </p>
 
       <div id="controls" aria-hidden="true">

@@ -59,10 +59,10 @@
     S.land = topojson.feature(world, world.objects.land);
     S.borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);         // country borders
     S.naStates = topojson.mesh(statesTopo, statesTopo.objects.states);  // US state borders (full mesh: keeps lake shores)
-    document.querySelector(".hint__label").textContent = hoverCapable ? "Hover a city to begin" : "Tap a city to begin";
     buildScaffold();
     bindGlobal();
     render();
+    buildSearch();
     window.addEventListener("resize", debounce(onResize, 160));
   }
 
@@ -171,7 +171,7 @@
       setRect(gDefs.select(`#clip-${key} rect`), r);
       setRect(P.group.select("rect.panel-bg"), r);
       setRect(P.group.select("rect.panel-frame"), r);
-      P.group.select("text.panel-title").attr("x", r.x + 16).attr("y", r.y + 25).text(CFG[key].title);
+      P.group.select("text.panel-title").attr("x", r.x + 16).attr("y", r.y + r.h - 14).text(CFG[key].title);   // bottom-left, clear of the top-centre search pill
       P.proj = makeProjection(CFG[key], S.blocks[key], r);
       const mx = r.w * PAN_MARGIN, my = r.h * PAN_MARGIN;   // room to pan past the fitted view
       P.zoom.extent([[r.x, r.y], [r.x + r.w, r.y + r.h]])
@@ -356,6 +356,113 @@
 
   function updateBar() {
     bar.textContent = panel.classList.contains("panel--expanded") ? "Show fewer ↑" : "See the other two ↓";
+  }
+
+  // ---- search ------------------------------------------------------------
+  // Diacritic/latin-extended folding so "Zurich" finds "Zürich", "Lodz" finds "Łódź", etc.
+  const FOLD = { "ł": "l", "đ": "d", "ø": "o", "ß": "ss", "þ": "th", "ð": "d", "æ": "ae", "œ": "oe" };
+  const fold = (s) => s.toLowerCase().replace(/[łđøßþðæœ]/g, (ch) => FOLD[ch] || ch)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  function buildSearch() {
+    const index = Object.entries(S.cities).map(([qid, c]) => ({
+      qid, key: panelKey(qid), rank: c.rank, name: c.city, country: c.country,
+      fName: fold(c.city), fCountry: fold(c.country),
+    }));
+    const el = document.getElementById("search");
+    const input = document.getElementById("search-input");
+    const list = document.getElementById("search-results");
+    const toggle = el.querySelector(".search__toggle");
+    let results = [], active = -1;
+
+    const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; };
+    const collapseMobile = () => { if (S.mode !== "side") el.classList.remove("search--open"); };
+
+    function run(raw) {
+      const q = fold(raw.trim());
+      if (!q) { results = []; close(); return; }
+      const scored = [];
+      for (const it of index) {
+        const s = it.fName.startsWith(q) ? 0 : it.fName.includes(q) ? 1 : it.fCountry.includes(q) ? 2 : -1;
+        if (s >= 0) scored.push({ it, s });
+      }
+      scored.sort((a, b) => a.s - b.s || a.it.rank - b.it.rank);   // best match kind first, then most prominent
+      results = scored.slice(0, 8).map((x) => x.it);
+      active = results.length ? 0 : -1;
+      paint();
+    }
+    function paint() {
+      list.innerHTML = results.length
+        ? results.map((it, i) =>
+            `<li class="search__opt" role="option" id="search-opt-${i}" data-i="${i}" aria-selected="${i === active}">` +
+            `<span class="search__opt-city">${esc(it.name)}</span>` +
+            `<span class="search__opt-country">${esc(it.country)}</span>` +
+            `<span class="search__opt-tag">${it.key === "na" ? "N. America" : "Europe"}</span></li>`).join("")
+        : `<li class="search__empty">No city found</li>`;
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+    }
+    function move(d) {
+      if (!results.length) return;
+      active = (active + d + results.length) % results.length;
+      [...list.children].forEach((li, i) => li.setAttribute("aria-selected", i === active));
+      list.children[active].scrollIntoView({ block: "nearest" });
+    }
+    function choose(qid) {
+      input.value = S.cities[qid].city;
+      close(); collapseMobile(); input.blur();
+      select(qid, true);        // pin, exactly like a click
+      focusCity(qid);           // then bring it into a clear reading position
+    }
+
+    input.addEventListener("input", () => run(input.value));
+    input.addEventListener("focus", () => { if (input.value.trim()) run(input.value); });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+      else if (e.key === "Enter") { if (results[active]) { e.preventDefault(); choose(results[active].qid); } }
+      else if (e.key === "Escape") {
+        e.stopPropagation();    // keep the global Escape from clearing the pinned city underneath
+        if (!list.hidden) close();
+        else { input.value = ""; input.blur(); collapseMobile(); }
+      }
+    });
+    list.addEventListener("mousedown", (e) => {     // mousedown fires before the input's blur
+      const li = e.target.closest(".search__opt"); if (!li) return;
+      e.preventDefault();
+      choose(results[+li.dataset.i].qid);
+    });
+    toggle.addEventListener("click", () => {
+      if (S.mode !== "side") el.classList.toggle("search--open");
+      input.focus();
+    });
+    document.addEventListener("pointerdown", (e) => { if (!el.contains(e.target)) close(); });
+  }
+
+  // Search-select: recenter the chosen city's panel so its dot lands clear of the info card
+  // (biased toward the gutter, since the card sits on the outer side), and reset the opposite
+  // panel to its fit view so all three counterparts + arcs are guaranteed visible.
+  function focusCity(qid) {
+    const key = panelKey(qid), other = key === "na" ? "eu" : "na";
+    const P = S.P[key], rect = P.rect, pos = S.pos.get(qid);
+    if (!rect || !pos) return;
+    const scale = 1.7;
+    const bx = S.mode === "side" ? (key === "eu" ? 0.42 : 0.58) : 0.5;   // gutter-bias on desktop; centre on mobile
+    const tx = rect.x + rect.w * bx, ty = rect.y + rect.h * 0.5;
+    const t = clampTransform(d3.zoomIdentity.translate(tx, ty).scale(scale).translate(-pos[0], -pos[1]), rect);
+    P.group.transition().duration(650).call(P.zoom.transform, t);
+    const O = S.P[other];
+    if (!isDefault(O.t)) O.group.transition().duration(650).call(O.zoom.transform, d3.zoomIdentity);
+  }
+  // Clamp a target transform to the same pan bounds d3-zoom enforces on interactive gestures.
+  function clampTransform(t, rect) {
+    const mx = rect.w * PAN_MARGIN, my = rect.h * PAN_MARGIN;
+    const dx0 = t.invertX(rect.x) - (rect.x - mx), dx1 = t.invertX(rect.x + rect.w) - (rect.x + rect.w + mx);
+    const dy0 = t.invertY(rect.y) - (rect.y - my), dy1 = t.invertY(rect.y + rect.h) - (rect.y + rect.h + my);
+    return t.translate(
+      dx1 > dx0 ? (dx0 + dx1) / 2 : Math.min(0, dx0) || Math.max(0, dx1),
+      dy1 > dy0 ? (dy0 + dy1) / 2 : Math.min(0, dy0) || Math.max(0, dy1)
+    );
   }
 
   // ---- resize + helpers --------------------------------------------------
