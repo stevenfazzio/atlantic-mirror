@@ -73,7 +73,7 @@ def backfill_coords(missing: list[str], *, force: bool) -> dict[str, tuple[float
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="nomic")
+    ap.add_argument("--model", default="qwen3")
     ap.add_argument("--source", choices=["lead", "profile"], default="profile")
     ap.add_argument("--profile-key", default="haiku")
     ap.add_argument("--caption-key", default="", help="caption variant to export (matches 07 --caption-key; baseline = empty)")

@@ -28,7 +28,7 @@ from sklearn.model_selection import cross_val_score
 
 from _common import INTERIM, PROCESSED, write_df
 
-MODEL_KEY = "nomic"
+MODEL_KEY = "qwen3"
 N_PCA = 50
 ID_COLS = ["country", "rank", "city", "population", "wikipedia_title", "qid"]
 SAMPLE_QUERIES = ["Manchester", "Lyon", "Munich", "Naples", "Rotterdam"]

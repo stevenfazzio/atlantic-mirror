@@ -251,7 +251,7 @@ def norm_pair(rec_qid: str, group: str, m_qid: str) -> tuple[str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="nomic")
+    ap.add_argument("--model", default="qwen3")
     ap.add_argument("--source", choices=["lead", "profile"], default="profile")
     ap.add_argument("--profile-key", default="haiku")
     ap.add_argument(

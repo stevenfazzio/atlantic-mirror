@@ -69,10 +69,11 @@ uv run python scripts/07_caption.py             --source profile --profile-key h
 uv run python scripts/08_export_web.py          --source profile --profile-key haiku --caption-key sonnet5v3
 ```
 
-Products: `data/processed/matches_nomic_profile_haiku_captioned_sonnet5v3.json` (full — every city
+Products: `data/processed/matches_qwen3_profile_haiku_captioned_sonnet5v3.json` (full — every city
 keyed by Wikidata QID with its group, real country, coordinates, and top-3 captioned analogs) and
 stage 08's slim `docs/data/atlantic-mirror.json`, which the web map loads. Add `--force` to any stage
-to ignore its cache.
+to ignore its cache. The shipped **embedder is qwen3** (`Qwen3-Embedding-0.6B`; stage 03's `--model`
+default, swapped from nomic on 2026-07-02 — see Evaluation).
 
 Captions (07) run on **Sonnet 5** with the symmetry-enforcing **v3** prompt (`--caption-key
 sonnet5v3`); the stage *defaults* (`--caption-model claude-haiku-4-5 --prompt v1`, no key) reproduce
@@ -96,18 +97,25 @@ bring it clear of the info card. Regenerate its data with stage 08, then preview
 Grading a task with **no ground truth** needed its own toolkit — offline diagnostics (not pipeline
 stages), all cached/resumable:
 
+- `lineup_eval.py` — **the primary matching-quality metric**, a **referring-expression** eval framed as
+  a *police lineup*: hand an LLM a caption plus a lineup of the true city and look-alikes and see if it
+  fingers the right one, judging **from Wikipedia leads only** (so it measures the *caption*, not the
+  city's fame). Because there's a verifiable right answer it's **grounded** — the model can't just voice
+  a preference. Hardening the distractors to nearest-neighbours gave it the sensitivity a coarse version
+  lacked; hardened, it tracks matching quality monotonically and is what surfaced the embedding lever.
+- `judge_pairs.py` — blind, order-randomized **head-to-head** twin-quality *preference* judge (a judge
+  sees one home city and two candidate twins and picks the better) — a useful **cross-check**, but a
+  subjective one, so secondary to the grounded lineup where the two disagree.
 - `judge_captions.py` — Opus LLM-as-judge scoring caption honesty (one-sided claims, scale inflation);
   drove the v1→v3 caption iteration.
-- `judge_pairs.py` — blind, order-randomized **head-to-head** twin-quality judge (a judge sees one home
-  city and two candidate twins and picks the better); the primary metric for embedding/matching choices.
-- `lineup_eval.py` — a **referring-expression** metric: score a caption by whether it can re-identify
-  its own cities out of a look-alike lineup (leads provided, so it measures the caption, not city fame).
 
 What they showed: text embedding + distillation drive most of the twin quality; neutralization and CSLS
-trade a little per-pair quality to keep the map diverse (un-hubbed); the embedding *model* itself isn't
-the lever; and a city's "twin" is really one representative of a *cloud* of comparable analogs (hence
-three per city). Ablation flags on stages 02b/03/05/07 (`--prompt`, `--model`, `--method`, `--rank`,
-`--sample`) drive these studies; their defaults reproduce the shipped map.
+trade a little per-pair quality to keep the map diverse (un-hubbed); **the embedding model *is* a lever
+after all** — on the grounded lineup, **qwen3** produces more discriminating pairs than nomic or bge
+(which the subjective judge had scored as a tie), so it's the shipped embedder; and a city's "twin" is
+really one representative of a *cloud* of comparable analogs (hence three per city). Ablation flags on
+stages 02b/03/05/07 (`--prompt`, `--model`, `--method`, `--rank`, `--sample`) drive these studies; their
+defaults reproduce the shipped (qwen3) map.
 
 ## Method notes & dropped approaches
 

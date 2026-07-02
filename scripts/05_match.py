@@ -25,7 +25,7 @@ import pandas as pd
 
 from _common import INTERIM, PROCESSED
 
-MODEL_KEY = "nomic"
+MODEL_KEY = "qwen3"
 N_OUT = 3
 CSLS_NBRS = 10
 REPORT_EU = [

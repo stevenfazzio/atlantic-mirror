@@ -137,7 +137,7 @@ def main():
     )
     ap.add_argument(
         "--ref-reps",
-        default="reps_nomic_profile_haiku.parquet",
+        default="reps_qwen3_profile_haiku.parquet",
         help="reference reps for nn distractors",
     )
     ap.add_argument("--ref-method", default="centroid")

@@ -9,12 +9,14 @@ the North America↔Europe pivot is merged (PR #1), so work on `main` now.
 Stages run in order 01 → 02 → 02b → 03 → 04 → 05 → 07 → 08, each cached/idempotent (re-runs skip done
 work; `--force` recomputes). Primary invocation uses `--source profile --profile-key haiku` for
 03–08 and `--model claude-haiku-4-5 --key haiku` for 02b — exact commands in README.md § Running.
+The shipped **embedder is qwen3** (`Qwen3-Embedding-0.6B`; stage 03 `--model` default) — swapped from
+nomic 2026-07-02 on the hardened-lineup evidence (see Settled).
 **Shipped captions:** stage 07 runs on Sonnet 5 with the v3 prompt (`--caption-model claude-sonnet-5
 --caption-effort medium --prompt v3 --caption-key sonnet5v3`), and stage 08 must get `--caption-key
 sonnet5v3` to export them; 07/08 *defaults* (no key) still rebuild the original Haiku/v1 baseline, so
 a re-run without those flags silently reverts the map to it.
 `ANTHROPIC_API_KEY` is required for 02b (distill) and 07 (caption); 08 (export web JSON) needs no key.
-Products: `data/processed/matches_nomic_profile_haiku_captioned_sonnet5v3.json` (full) and stage 08's
+Products: `data/processed/matches_qwen3_profile_haiku_captioned_sonnet5v3.json` (full) and stage 08's
 slim `docs/data/atlantic-mirror.json` (what the web map loads).
 
 ## Data safety — read before touching `data/`
@@ -31,8 +33,8 @@ new cities. Don't pass `--force` without a reason.
 - **Output JSON** (`matches_..._captioned.json`, what the web map consumes) — keyed by QID:
   ```json
   "<qid>": {
-    "city": "Munich", "group": "Europe", "country": "Germany", "lat": 48.13, "lon": 11.57,
-    "matches": [{"qid": "...", "city": "Milwaukee", "similarity": 0.55, "caption": "Major industrial city with German heritage..."}, ...]
+    "city": "Venice", "group": "Europe", "country": "Italy", "lat": 45.44, "lon": 12.33,
+    "matches": [{"qid": "...", "city": "New Orleans", "similarity": 0.55, "caption": "A historic waterfront city famed for culture and cuisine, shaped by water..."}, ...]
   }
   ```
   Both groups present; each city's `matches` are its top-3 in the *other* group. Bidirectional and
@@ -79,7 +81,7 @@ read as a *broken* map, so the deliberate call is two honest panels.
   hint, meta). An **× (shown only when there's text) and Escape** wipe the box **and** the selection and
   reset both panels — a clean slate for the next search.
 - **Mobile launcher:** the otherwise-empty bottom strip (when nothing's selected) holds example-city
-  **chips** (`buildLauncher`, currently Munich/Detroit/Lisbon/Kraków) — a one-tap way in on a phone where
+  **chips** (`buildLauncher`, currently Venice/Madrid/Detroit/Boston) — a one-tap way in on a phone where
   the dots are tiny; a chip pins + recenters like a search pick. Hidden on desktop and once a city is
   selected (the peek sheet takes the strip).
 - **Deploy cache-busting:** GitHub Pages serves `style.css`/`main.js` with `max-age=600`, and there's no
@@ -95,12 +97,20 @@ read as a *broken* map, so the deliberate call is two honest panels.
 
 ## Evaluation tooling (offline diagnostics, not pipeline stages)
 Built to grade a no-ground-truth task; all cached/resumable, none change the shipped pipeline.
+- `lineup_eval.py` — **the primary matching-quality metric.** A *referring-expression* eval framed as a
+  **police lineup**: hand an LLM a caption + a lineup (true city + look-alikes) and see if it fingers the
+  right one, **from Wikipedia leads only** (the *caption* is on trial, not the model's fame memory). It's
+  **grounded** — a proxy task with a verifiable answer, so the model can't just emit a preference (unlike
+  a taste-judge). **Hardening distractors to nearest-neighbours (`--distractors nn`, vs `rank`) gave it
+  the sensitivity it lacked**; hardened, it tracks matching quality monotonically (random < population <
+  shipped) and **caught the embedding lever the pair judge scored as a tie → qwen3** (see Settled).
+  Metrics: per-pair prob-mass / top-1 rate / below-chance fraction + a caption-free target-diversity signal.
+- `judge_pairs.py` — blind, order-randomized head-to-head twin-quality **preference** judge (Sonnet + Opus
+  spot-check), caption-free. **Now the cross-check, not the arbiter:** it catches what the lineup can't (a
+  specific-shared caption built on a *coincidental* trait), but as a subjective preference it's the weaker
+  instrument where the two disagree. `--config LABEL=FILE` (≥2).
 - `judge_captions.py` — Opus LLM-as-judge on caption honesty (per-claim one-sided / scale / invention).
-- `judge_pairs.py` — blind, order-randomized head-to-head twin-quality judge (Sonnet + Opus spot-check),
-  caption-free; the main metric for embedding/matching/method choices. `--config LABEL=FILE` (≥2).
-- `lineup_eval.py` — "police-lineup" identifiability metric (feed leads → no fame confound; `--distractors
-  rank|nn`) + caption-free target-diversity; per-label specificity signal.
-- **Additive experiment flags (defaults reproduce the shipped map):** 03 `--model {nomic,bge,qwen3}`;
+- **Additive experiment flags (defaults now reproduce the qwen3 shipped map):** 03 `--model {nomic,bge,qwen3}` (default qwen3);
   05 `--method {centroid,leace,raw_pca}` + `--rank {csls,cosine}`; 07 `--method`/`--sample`/`--prompt
   {v1..v4.1}`; 02b `--prompt {v1,rich}`. Method/rank/caption-key tags keep ablation outputs from
   colliding with the shipped files.
@@ -117,12 +127,19 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
   distillation tested (2026-07, Opus + fuller `--prompt rich`):** a modest *matching*-only gain (more
   diverse, less identity leakage; per-pair edge not significant) that does NOT reach the lead-written
   captions — **not adopted**. Full-Wikipedia-page source is matching-only too, so shelved.
-- **Investigated 2026-07 with the metric suite — shipped config held on every axis:** embedding model
-  is NOT the lever (nomic ≈ bge ≈ qwen3 head-to-head); neutralization is a quality×diversity tradeoff
-  (raw_pca hubby / leace over-spread / **centroid the balance**); the ablation ladder shows each stage
-  earns its keep on a different axis (distill→character; neutralize/CSLS→un-hub the map). Matches are
-  **cloud-not-soulmate** — swap the distiller and the #1 twin moves but stays in the old ranking's top
-  ~8%, so the matcher identifies an analog *neighborhood*, not a unique twin (why the map shows three).
+- **Embedder = qwen3 (`Qwen3-Embedding-0.6B`), swapped from nomic 2026-07-02.** The original bake-off
+  called the embedders a tie — but that was on the *pair judge* (subjective preference). On the **hardened
+  lineup** (grounded), **qwen3 clearly leads** (top-1 67.7% vs nomic 61.3% @300 pairs, ahead on every
+  sub-metric, robust 150→300, not a fame artifact), and side-by-side its pairs read as more *specific*
+  twins (Boston→Edinburgh, Detroit→Stuttgart/Ingolstadt/Wolfsburg, Venice→New Orleans). bge ≈ nomic. The
+  swap lost Munich→Milwaukee (why the flagship moved to Venice→New Orleans; fine pre-launch). **So
+  "embedding isn't the lever" is retired — it was a lever; the *subjective* metric just couldn't see it.**
+  Richer profiles don't compound (opusrich flat on qwen3 too — no embedder×distillation synergy).
+- Neutralization is a quality×diversity tradeoff (raw_pca hubby / leace over-spread / **centroid the
+  balance**); the ablation ladder shows each stage earns its keep on a different axis (distill→character;
+  neutralize/CSLS→un-hub the map). Matches are **cloud-not-soulmate** — swap the distiller and the #1
+  twin moves but stays in the old ranking's top ~8%, so the matcher identifies an analog *neighborhood*,
+  not a unique twin (why the map shows three).
 - **Captions (07) = Sonnet 5 + symmetry-enforcing v3 prompt (shipped 2026-07-01, commit `ac63eba`).**
   Haiku/v1 captions were one-sided (a concrete trait true of only one city of the pair) ~84% of the
   time → ~52% on Sonnet-5/v3, and shorter. `scripts/judge_captions.py` (Opus LLM-as-judge: per-claim

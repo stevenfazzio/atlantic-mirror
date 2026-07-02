@@ -22,7 +22,7 @@ import plotly.graph_objects as go
 
 from _common import PROCESSED, ROOT
 
-MODEL_KEY = "nomic"
+MODEL_KEY = "qwen3"
 
 
 def main() -> None:

@@ -62,7 +62,7 @@ ID_COLS = ["country", "rank", "city", "population", "wikipedia_title", "qid"]
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
-        "--model", choices=sorted(MODELS), default="nomic", help="embedder from the registry"
+        "--model", choices=sorted(MODELS), default="qwen3", help="embedder from the registry"
     )
     ap.add_argument(
         "--source",

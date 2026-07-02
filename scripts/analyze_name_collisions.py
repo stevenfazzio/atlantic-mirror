@@ -17,7 +17,7 @@ import pandas as pd
 
 from _common import PROCESSED
 
-MODEL_KEY = "nomic"
+MODEL_KEY = "qwen3"
 STOP = {"city", "upon", "the", "and", "county", "borough", "district", "town", "royal"}
 
 
