@@ -85,7 +85,7 @@ claims, scale inflation) that drove the v1→v3 iteration.
 
 `docs/` is a static, dependency-free site (vendored d3 + topojson + world-atlas) served straight from
 GitHub Pages — no build step, no runtime keys. It renders **two independent, framed map-cards** (North
-America and Europe), each pan/zoomable on its own; hover (or tap) a city and its three character-twins
+America and Europe), each pan/zoomable on its own; hover (or tap) a city and its three character counterparts
 light up on the opposite card, with an arc to each and a card of captions — one sentence per pair,
 written to fit *both* cities. Regenerate its data with stage 08, then preview locally with
 `python3 -m http.server -d docs` (open `http://127.0.0.1:8000`).

@@ -4,7 +4,7 @@
    North America and Europe are drawn as two framed, independently pan/zoomable
    map-cards (side by side on desktop, stacked on mobile). Dots are sized by
    prominence. Select a city (hover on desktop, tap on mobile; nearest-city snap
-   via a per-panel d3-quadtree) → it turns vermilion, its three character-twins
+   via a per-panel d3-quadtree) → it turns vermilion, its three character counterparts
    light up teal in the OTHER card, an arc is drawn to each, and a card shows the
    captions. Desktop: the card tracks the selected point and pins on click.
    Mobile: the card is a bottom peek sheet (space reserved so it never covers the
@@ -285,7 +285,7 @@
     return `M${ax},${ay}Q${(ax + bx) / 2 + nx * k},${(ay + by) / 2 + ny * k} ${bx},${by}`;
   }
 
-  // Only the selected city and its three twins get on-map labels.
+  // Only the selected city and its three counterparts get on-map labels.
   function renderLabels() {
     const sel = S.selected, cands = [];
     if (sel) {
@@ -328,8 +328,8 @@
     }).join("");
     panelBody.innerHTML =
       `<h2 class="p-city">${wikiLink(qid, c.city)}<span class="p-city__country">${esc(c.country)}</span></h2>` +
-      `<p class="p-lead">Character-twins in ${esc(shore)}</p>` +
-      `<p class="p-note">Each description fits <em>both</em> ${esc(c.city)} and its twin.</p>` +
+      `<p class="p-lead">Character counterparts in ${esc(shore)}</p>` +
+      `<p class="p-note">Each description fits <em>both</em> ${esc(c.city)} and its counterpart.</p>` +
       rows;
     panel.classList.add("is-open");
     panel.classList.toggle("panel--pinned", S.pinned);   // only a pinned card is interactive (hover cards never intercept)

@@ -2,7 +2,7 @@
    Atlantic Mirror — editorial-atlas design system.
    Warm paper + ink; a literary serif (Newsreader) against a grotesque (Archivo).
    Two framed map-cards. Country labels orient each; the selected city goes
-   vermilion, its three twins go teal in the other card with an arc to each.
+   vermilion, its three counterparts go teal in the other card with an arc to each.
    ============================================================================ */
 
 :root {
@@ -22,7 +22,7 @@
   --dot:          #a49a83;
   --sel:          #cf3b23;    /* vermilion — selected city */
   --sel-deep:     #b3311b;
-  --match:        #1a7b73;    /* deep teal — its twins */
+  --match:        #1a7b73;    /* deep teal — its counterparts */
   --match-deep:   #135f59;
 
   --hair:         rgba(33, 29, 24, 0.12);
@@ -63,7 +63,7 @@ body::before {   /* printed-paper tooth */
   background: linear-gradient(90deg, var(--ink) 0%, var(--hair) 100%); transform: translateY(-0.28em);
 }
 .dek {
-  margin: 0; max-width: 60ch; justify-self: end; text-align: right;
+  margin: 0; max-width: 68ch; justify-self: end; text-align: right; text-wrap: balance;
   font-size: clamp(12.5px, 1.35vw, 15px); line-height: 1.42; color: var(--ink-soft); font-weight: 400;
 }
 .dek em { font-family: var(--serif); font-style: italic; color: var(--ink); font-size: 1.06em; }
@@ -92,7 +92,7 @@ body::before {   /* printed-paper tooth */
 
 .arc { fill: none; stroke: var(--match); stroke-width: 1.5px; stroke-linecap: round; opacity: 0.55; }
 
-/* On-map labels: only the selected city and its twins. */
+/* On-map labels: only the selected city and its counterparts. */
 .city-label {
   font-family: var(--serif); font-weight: 500;
   paint-order: stroke fill; stroke: var(--surface); stroke-width: 3.4px; stroke-linejoin: round;
@@ -231,7 +231,7 @@ body::before {   /* printed-paper tooth */
   .panel.is-open { transform: none; }
   .panel__bar { display: block; }
 
-  /* collapsed peek = header + note + the #1 twin (teaser) + the expand bar */
+  /* collapsed peek = header + note + the #1 counterpart (teaser) + the expand bar */
   .p-lead { display: none; }
   .p-note { margin: 4px 0 8px; }
   .p-match { margin-bottom: 4px; }

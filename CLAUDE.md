@@ -41,7 +41,7 @@ new cities. Don't pass `--force` without a reason.
   distracting; a call about *those encodings*, not a ban on numbers/colour).
 - **Slim web JSON** (`docs/data/atlantic-mirror.json`, stage 08, committed) — keyed by QID with
   `city, group, country, rank` (prominence → dot size), `wiki` (enwiki title → article link),
-  `lat, lon`, and `matches: [{qid, caption}]` (each twin's name/coords/country resolved from the same
+  `lat, lon`, and `matches: [{qid, caption}]` (each counterpart's name/coords/country resolved from the same
   table). Coordinates missing upstream are backfilled from Wikidata P625 (cached in `data/raw/`).
 
 ## Web map — `docs/` (built; the design we landed on)
@@ -52,17 +52,22 @@ side by side on desktop, **stacked on mobile**, each **independently pan/zoomabl
 pan, per-card reset). No shared transform, no cropped-Atlantic seam: the fused "one interrupted map"
 read as a *broken* map, so the deliberate call is two honest panels.
 - **Dots sized by prominence** (`rank`). **No basemap labels** (country labels were too sparse in NA /
-  too crowded in EU); only the selected city + its three twins get on-map labels.
+  too crowded in EU); only the selected city + its three counterparts get on-map labels.
 - **Select**: hover (desktop, non-sticky preview) / tap (mobile); **click-to-pin** on desktop so you
   can move onto the card; **nearest-city snap** via a per-card d3-quadtree. → selected city vermilion,
-  its three twins teal in the *other* card, an **arc** drawn to each across the gutter.
+  its three counterparts teal in the *other* card, an **arc** drawn to each across the gutter.
 - **Info card**: desktop = a card that **tracks the selected dot** on its outer side (NA→left, EU→right,
   clamped on-screen so it never covers the arcs; a hover card is `pointer-events:none`, only a pinned
-  one is interactive), with **Wikipedia links** for the city + twins. Mobile = a **peek sheet** in a
-  reserved bottom strip (never covers the far map) with a **teaser** (the #1 twin's shared sentence) +
+  one is interactive), with **Wikipedia links** for the city + counterparts. Mobile = a **peek sheet** in a
+  reserved bottom strip (never covers the far map) with a **teaser** (the #1 counterpart's shared sentence) +
   a "See the other two" expander.
-- Each caption is written to fit **both** the city and its twin; the card says so explicitly (readers
-  were taking them as describing only the twin — the single most important non-obvious point).
+- Each caption is written to fit **both** the city and its counterpart; the card says so explicitly (readers
+  were taking them as describing only the counterpart — the single most important non-obvious point).
+- **On-card term is "counterpart," not "twin"** (softened 2026-07-02). "Twin" overclaimed on two axes —
+  uniqueness (three are shown) and closeness — against the **cloud-not-soulmate** finding, and a skeptic
+  reading a loose pairing as a "twin" undercut perceived quality. Don't revert UI copy to "twin." (The
+  sister-cities/town-twinning conceit stays; "twin" survives only as internal shorthand + the
+  `judge_pairs` "twin-quality" metric name.)
 
 > Scope note, so this doesn't get re-poisoned: "no arcs" was a shelved intra-Europe feature (the
 > transatlantic arcs above are wanted); "no numbers / no colour scale" meant the specific Plotly cosine
