@@ -11,7 +11,8 @@ stage 07 can caption it and the map can look it up).
 
 --source lead | profile (+ --profile-key); --method centroid | leace | raw_pca.
 Reads:  reps_<model>[_profile_<key>].parquet, cities.parquet, city_lists.parquet (country_name)
-Writes: matches_<model>[_profile_<key>].json  (map-ready: keyed by qid, both groups)
+Writes: matches_<model>[_profile_<key>][_<method>].json  (map-ready: keyed by qid, both groups;
+        the <method> tag is omitted for the default centroid so downstream paths are unchanged)
 """
 
 from __future__ import annotations
@@ -27,8 +28,25 @@ from _common import INTERIM, PROCESSED
 MODEL_KEY = "nomic"
 N_OUT = 3
 CSLS_NBRS = 10
-REPORT_EU = ["Manchester", "Lyon", "Munich", "Naples", "Rotterdam", "Barcelona", "Edinburgh", "Hamburg"]
-REPORT_NA = ["Pittsburgh", "Milwaukee", "New Orleans", "Montreal", "Mexico City", "Vancouver", "Boston"]
+REPORT_EU = [
+    "Manchester",
+    "Lyon",
+    "Munich",
+    "Naples",
+    "Rotterdam",
+    "Barcelona",
+    "Edinburgh",
+    "Hamburg",
+]
+REPORT_NA = [
+    "Pittsburgh",
+    "Milwaukee",
+    "New Orleans",
+    "Montreal",
+    "Mexico City",
+    "Vancouver",
+    "Boston",
+]
 
 
 def l2(m: np.ndarray) -> np.ndarray:
@@ -49,7 +67,15 @@ def main() -> None:
     ap.add_argument("--model", default=MODEL_KEY)
     ap.add_argument("--source", choices=["lead", "profile"], default="lead")
     ap.add_argument("--profile-key", default="haiku", help="distillation key for --source profile")
-    ap.add_argument("--method", default="centroid", help="representation: centroid | leace | raw_pca")
+    ap.add_argument(
+        "--method", default="centroid", help="representation: centroid | leace | raw_pca"
+    )
+    ap.add_argument(
+        "--rank",
+        default="csls",
+        choices=["csls", "cosine"],
+        help="ranking score (csls = hubness-corrected, shipped; cosine = plain, for ablations)",
+    )
     args = ap.parse_args()
 
     suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
@@ -67,8 +93,9 @@ def main() -> None:
     eu_name, eu_qid = eu["city"].to_numpy(), eu["qid"].to_numpy()
     na_name, na_qid = na["city"].to_numpy(), na["qid"].to_numpy()
 
-    csls = csls_matrix(eu_n, na_n, CSLS_NBRS)  # eu x na; ranking (hubness-corrected)
-    cos = eu_n @ na_n.T  # cosine for display weights (symmetric across directions)
+    csls = csls_matrix(eu_n, na_n, CSLS_NBRS)  # eu x na; hubness-corrected
+    cos = eu_n @ na_n.T  # plain cosine (also the stored display weight, both directions)
+    rank_mat = csls if args.rank == "csls" else cos  # what top-n is chosen by
 
     records: dict[str, dict] = {}
 
@@ -83,35 +110,55 @@ def main() -> None:
         }
 
     for i in range(len(eu)):  # Europe -> North America (top per row)
-        top = np.argsort(-csls[i])[:N_OUT]
-        add(eu.iloc[i], [
-            {"qid": str(na_qid[j]), "city": na_name[j], "similarity": round(float(cos[i, j]), 3)}
-            for j in top
-        ])
+        top = np.argsort(-rank_mat[i])[:N_OUT]
+        add(
+            eu.iloc[i],
+            [
+                {
+                    "qid": str(na_qid[j]),
+                    "city": na_name[j],
+                    "similarity": round(float(cos[i, j]), 3),
+                }
+                for j in top
+            ],
+        )
     for j in range(len(na)):  # North America -> Europe (top per column)
-        top = np.argsort(-csls[:, j])[:N_OUT]
-        add(na.iloc[j], [
-            {"qid": str(eu_qid[i]), "city": eu_name[i], "similarity": round(float(cos[i, j]), 3)}
-            for i in top
-        ])
+        top = np.argsort(-rank_mat[:, j])[:N_OUT]
+        add(
+            na.iloc[j],
+            [
+                {
+                    "qid": str(eu_qid[i]),
+                    "city": eu_name[i],
+                    "similarity": round(float(cos[i, j]), 3),
+                }
+                for i in top
+            ],
+        )
 
-    print(f"{args.source}/{args.method}: {len(eu)} Europe x {len(na)} North America, both directions\n")
+    print(
+        f"{args.source}/{args.method}: {len(eu)} Europe x {len(na)} North America, both directions\n"
+    )
     eu_ix = {eu_name[i]: i for i in range(len(eu))}
     na_ix = {na_name[j]: j for j in range(len(na))}
     print("Europe -> North America:")
     for q in REPORT_EU:
         if q in eu_ix:
             i = eu_ix[q]
-            top = np.argsort(-csls[i])[:N_OUT]
+            top = np.argsort(-rank_mat[i])[:N_OUT]
             print(f"  {q:18s} -> " + ", ".join(f"{na_name[j]} ({cos[i, j]:.2f})" for j in top))
     print("\nNorth America -> Europe:")
     for q in REPORT_NA:
         if q in na_ix:
             j = na_ix[q]
-            top = np.argsort(-csls[:, j])[:N_OUT]
+            top = np.argsort(-rank_mat[:, j])[:N_OUT]
             print(f"  {q:18s} -> " + ", ".join(f"{eu_name[i]} ({cos[i, j]:.2f})" for i in top))
 
-    out_path = PROCESSED / f"matches_{args.model}{suffix}.json"
+    # centroid + csls (the shipped default) keep the bare path so 06/07/08 are unaffected; other
+    # method/rank choices get a tag so an ablation never overwrites the default.
+    method_tag = "" if args.method == "centroid" else f"_{args.method}"
+    rank_tag = "" if args.rank == "csls" else "_cos"
+    out_path = PROCESSED / f"matches_{args.model}{suffix}{method_tag}{rank_tag}.json"
     tmp = out_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(records, indent=2, ensure_ascii=False))
     tmp.replace(out_path)

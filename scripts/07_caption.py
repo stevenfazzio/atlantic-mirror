@@ -13,6 +13,7 @@ Writes: data/raw/captions/<eu_qid>__<na_qid>.txt                             cac
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -110,7 +111,97 @@ administrative language, and never manufacture shared richness by importing one 
 arc, culture); avoid vague filler like "vibrant, diverse city".
 - Output only the phrase -- no preamble."""
 
-PROMPTS = {"v1": SYSTEM_V1, "v2": SYSTEM_V2, "v3": SYSTEM_V3}
+# V4 keeps V3's honesty guardrails but fixes the blandness they caused: the judge showed V3 honest
+# (~52% one-sided) but the diversity + lineup metrics showed it collapsed to templates ("on a river"
+# 12%->41%). V4 replaces V3's eager "go broad/generic" fallback with a push for the MOST SPECIFIC
+# genuinely-shared trait and an explicit anti-template rule -- honest AND identifying.
+SYSTEM_V4 = """You are labeling a pair of "sibling cities" -- a European city and a North American \
+city an algorithm identified as cross-country analogs -- for a general audience.
+
+You are given both cities' encyclopedia leads. Write a single concise descriptive PHRASE (not a full \
+sentence; 20 words MAXIMUM) capturing character the two cities GENUINELY SHARE -- the kind of place \
+they both are. It must read as one description that is TRUE OF EACH city on its own.
+
+Hard rules (honesty -- never break these):
+- Do NOT name either city, and do NOT start with "Both" or "Two". Write a noun phrase describing the \
+shared type.
+- SYMMETRY (most important): every trait you include must be clearly supported by BOTH leads. If a \
+trait -- an era ("medieval"), an industry, a landmark, a role, a scale -- appears in only one lead, \
+you must NOT use it. Check each word against the WEAKER (less-detailed) lead; if that city does not \
+clearly have the trait, cut it.
+- SCALE HONESTY: describe each city at the scale its own lead supports. Do NOT upgrade a suburb, edge \
+city, satellite, or small town into a "hub", "major", "metropolis", or "regional center" it is not.
+- NO CAPITAL/ADMINISTRATIVE HEDGING: use "capital", "seat of government", or "administrative center" \
+ONLY if BOTH leads clearly give that role. Never use bridging hedges like "capital-region", \
+"regional capital", or "regional seat" to make one city's status sound shared.
+- Never manufacture or overstate a shared trait to seem specific. Honesty wins over vividness.
+
+Be SPECIFIC (this is what makes a caption good, once it is honest):
+- Lead with the MOST SPECIFIC character the two GENUINELY share -- a particular industry, a defining \
+historical era, a distinctive geographic or physical feature, an unusual economic or cultural role. A \
+precise, even non-obvious shared trait (as long as BOTH leads clearly support it) is far better than \
+a generic one.
+- AVOID TEMPLATES: do NOT fall back on generic descriptors -- "a city on a river", "a coastal city", \
+"a suburb near a larger metropolis", "a historic city with culture" -- unless that truly is the \
+single most distinctive thing the two share. Such phrases fit hundreds of cities; aim for a caption \
+that fits THESE TWO and few others.
+- Only if the two genuinely share nothing specific, write a short honest plain phrase -- but treat \
+that as the rare exception, not the default.
+- Do NOT default to the more richly-described city; the phrase must hold for the less-documented one \
+too.
+
+Output only the phrase -- no preamble."""
+
+# V4.1 keeps V4's specificity push but fixes its one regression: the judge showed V4 doubled
+# scale/role overclaiming (11%->21%), almost all of it invented ADMINISTRATIVE-RANK or SIZE claims
+# ("national capital", "imperial capital", "administrative seat", "second-largest") reached for as
+# distinctive hooks. V4.1 forbids rank/size as the hook and redirects specificity to KIND of place.
+SYSTEM_V4_1 = """You are labeling a pair of "sibling cities" -- a European city and a North American \
+city an algorithm identified as cross-country analogs -- for a general audience.
+
+You are given both cities' encyclopedia leads. Write a single concise descriptive PHRASE (not a full \
+sentence; 20 words MAXIMUM) capturing character the two cities GENUINELY SHARE -- the kind of place \
+they both are. It must read as one description that is TRUE OF EACH city on its own.
+
+Hard rules (honesty -- never break these):
+- Do NOT name either city, and do NOT start with "Both" or "Two". Write a noun phrase describing the \
+shared type.
+- SYMMETRY (most important): every trait you include must be clearly supported by BOTH leads. If a \
+trait -- an era ("medieval"), an industry, a landmark, a role, a scale -- appears in only one lead, \
+you must NOT use it. Check each word against the WEAKER (less-detailed) lead; if that city does not \
+clearly have the trait, cut it.
+- SCALE & RANK HONESTY (captions go wrong here most): a city's ADMINISTRATIVE STATUS and SIZE RANK \
+are the most error-prone, least transferable traits. Do NOT claim a shared "national/imperial/\
+provincial/state capital", "seat of government", "administrative center", "largest/second-largest \
+city", "major metropolis", or "hub" unless BOTH leads state that role plainly. Never upgrade or \
+invent rank to sound distinctive (a county seat is not a "provincial capital"; a suburb is not an \
+"administrative center"; a state capital is not a "national capital"). Never use bridging hedges \
+("capital-region", "regional capital", "just outside a capital") to make one city's status sound shared.
+- Never manufacture or overstate a shared trait to seem specific. Honesty wins over vividness.
+
+Be SPECIFIC -- but from the right material:
+- Your distinctive hook must be the KIND of place the two share -- a particular industry, a defining \
+historical era, a distinctive geographic or physical feature, an unusual economic or cultural role -- \
+NEVER administrative rank or size. A precise, even non-obvious shared trait of this kind (as long as \
+BOTH leads clearly support it) is far better than a generic one.
+- AVOID TEMPLATES: do NOT fall back on generic descriptors -- "a city on a river", "a coastal city", \
+"a suburb near a larger metropolis", "a historic city with culture" -- unless that truly is the \
+single most distinctive thing the two share. Such phrases fit hundreds of cities; aim for a caption \
+that fits THESE TWO and few others.
+- Only if the two genuinely share nothing specific, write a short honest plain phrase -- but treat \
+that as the rare exception, not the default.
+- Do NOT default to the more richly-described city; the phrase must hold for the less-documented one \
+too.
+
+Output only the phrase -- no preamble."""
+
+PROMPTS = {
+    "v1": SYSTEM_V1,
+    "v2": SYSTEM_V2,
+    "v3": SYSTEM_V3,
+    "v4": SYSTEM_V4,
+    "v4.1": SYSTEM_V4_1,
+}
 
 client = anthropic.Anthropic(max_retries=5)
 
@@ -130,7 +221,10 @@ def make_caption(eu_lead: str, na_lead: str, *, model: str, system: str, effort:
         model=model,
         system=system,
         messages=[
-            {"role": "user", "content": f"European city:\n{eu_lead}\n\nNorth American city:\n{na_lead}"}
+            {
+                "role": "user",
+                "content": f"European city:\n{eu_lead}\n\nNorth American city:\n{na_lead}",
+            }
         ],
         **kwargs,
     )
@@ -160,33 +254,72 @@ def main() -> None:
     ap.add_argument("--model", default="nomic")
     ap.add_argument("--source", choices=["lead", "profile"], default="profile")
     ap.add_argument("--profile-key", default="haiku")
+    ap.add_argument(
+        "--method",
+        default="centroid",
+        help="stage-05 method tag on the matches file (centroid = untagged)",
+    )
     ap.add_argument("--caption-model", default=CAPTION_MODEL)
     ap.add_argument("--caption-effort", default=None, help="effort for non-haiku caption models")
     ap.add_argument("--prompt", choices=list(PROMPTS), default="v1")
-    ap.add_argument("--caption-key", default="", help="label; namespaces cache dir + output file (baseline = empty)")
+    ap.add_argument(
+        "--caption-key",
+        default="",
+        help="label; namespaces cache dir + output file (baseline = empty)",
+    )
+    ap.add_argument(
+        "--sample",
+        type=int,
+        default=0,
+        help="caption only N hash-sampled pairs (prunes matches to them); for cheap prompt eval",
+    )
     ap.add_argument("--force", action="store_true", help="re-caption even if cached")
     ap.add_argument("--workers", type=int, default=WORKERS)
     args = ap.parse_args()
 
     suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
-    matches = json.loads((PROCESSED / f"matches_{args.model}{suffix}.json").read_text())
+    method_tag = "" if args.method == "centroid" else f"_{args.method}"
+    matches = json.loads((PROCESSED / f"matches_{args.model}{suffix}{method_tag}.json").read_text())
     lead = pd.read_parquet(PROCESSED / "cities.parquet").set_index("qid")["lead_text"].to_dict()
 
-    pairs = sorted({
-        norm_pair(q, rec["group"], m["qid"])
-        for q, rec in matches.items() for m in rec["matches"]
-    })
+    all_pairs = {
+        norm_pair(q, rec["group"], m["qid"]) for q, rec in matches.items() for m in rec["matches"]
+    }
+    if args.sample and args.sample < len(all_pairs):
+        # same hash-sample as lineup_eval, so a sampled caption set lines up with the sampled eval
+        keep = set(
+            sorted(all_pairs, key=lambda k: hashlib.md5(f"{k[0]}__{k[1]}".encode()).hexdigest())[
+                : args.sample
+            ]
+        )
+        for q, rec in list(matches.items()):
+            rec["matches"] = [
+                m for m in rec["matches"] if norm_pair(q, rec["group"], m["qid"]) in keep
+            ]
+        matches = {q: rec for q, rec in matches.items() if rec["matches"]}
+    pairs = sorted(
+        {norm_pair(q, rec["group"], m["qid"]) for q, rec in matches.items() for m in rec["matches"]}
+    )
     system = PROMPTS[args.prompt]
-    print(f"{len(pairs)} unique European<->North American pairs to caption "
-          f"(model={args.caption_model}, prompt={args.prompt}, key={args.caption_key or '(baseline)'})")
+    print(
+        f"{len(pairs)} unique European<->North American pairs to caption "
+        f"(model={args.caption_model}, prompt={args.prompt}, key={args.caption_key or '(baseline)'})"
+    )
 
     results, done = {}, 0
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = [
             ex.submit(
-                caption_pair, euq, naq, lead[euq], lead[naq],
-                model=args.caption_model, system=system, effort=args.caption_effort,
-                caption_key=args.caption_key, force=args.force,
+                caption_pair,
+                euq,
+                naq,
+                lead[euq],
+                lead[naq],
+                model=args.caption_model,
+                system=system,
+                effort=args.caption_effort,
+                caption_key=args.caption_key,
+                force=args.force,
             )
             for euq, naq in pairs
         ]
@@ -202,7 +335,7 @@ def main() -> None:
             m["caption"] = results[norm_pair(q, rec["group"], m["qid"])]
 
     cap = f"_{args.caption_key}" if args.caption_key else ""
-    out_path = PROCESSED / f"matches_{args.model}{suffix}_captioned{cap}.json"
+    out_path = PROCESSED / f"matches_{args.model}{suffix}{method_tag}_captioned{cap}.json"
     tmp = out_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(matches, indent=2, ensure_ascii=False))
     tmp.replace(out_path)

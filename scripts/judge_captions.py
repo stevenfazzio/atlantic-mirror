@@ -101,7 +101,13 @@ SCHEMA = {
         "note": {"type": "string"},
     },
     "required": [
-        "claims", "scale_role", "scale_role_note", "invented", "invented_note", "specificity", "note",
+        "claims",
+        "scale_role",
+        "scale_role_note",
+        "invented",
+        "invented_note",
+        "specificity",
+        "note",
     ],
 }
 
@@ -148,7 +154,10 @@ def norm_pair(rec_qid: str, group: str, m_qid: str) -> tuple[str, str]:
 
 def flatten(eu_qid, na_qid, caption, similarity, cities, verdict) -> dict:
     claims = verdict["claims"]
-    tally = {k: sum(c["applies_to"] == k for c in claims) for k in ("both", "eu_only", "na_only", "neither")}
+    tally = {
+        k: sum(c["applies_to"] == k for c in claims)
+        for k in ("both", "eu_only", "na_only", "neither")
+    }
     return {
         "eu_qid": eu_qid,
         "na_qid": na_qid,
@@ -183,8 +192,10 @@ def report(df: pd.DataFrame) -> None:
     print(f"  invented (judge flag):                 {df['invented'].mean():.1%}")
     eu_only, na_only = int(df["n_eu_only"].sum()), int(df["n_na_only"].sum())
     lean = eu_only - na_only
-    print(f"  directional lean: {eu_only} eu-only vs {na_only} na-only claims "
-          f"(net {lean:+d} toward {'Europe' if lean > 0 else 'North America'})")
+    print(
+        f"  directional lean: {eu_only} eu-only vs {na_only} na-only claims "
+        f"(net {lean:+d} toward {'Europe' if lean > 0 else 'North America'})"
+    )
 
     print("\n  specificity:")
     for k, v in df["specificity"].value_counts().items():
@@ -202,8 +213,10 @@ def report(df: pd.DataFrame) -> None:
     worst = df[df["one_sided"]].sort_values(["n_eu_only", "n_na_only"], ascending=False).head(15)
     print(f"\n  worst one-sided captions (of {int(df['one_sided'].sum())}):")
     for r in worst.itertuples(index=False):
-        print(f"    [{r.n_eu_only}eu/{r.n_na_only}na, sim {r.similarity:.2f}] "
-              f"{r.eu_city} <-> {r.na_city}: {r.caption}")
+        print(
+            f"    [{r.n_eu_only}eu/{r.n_na_only}na, sim {r.similarity:.2f}] "
+            f"{r.eu_city} <-> {r.na_city}: {r.caption}"
+        )
         print(f"        note: {r.note}")
 
     over = df[df["scale_overclaimed"]].head(10)
@@ -218,17 +231,34 @@ def main() -> None:
     ap.add_argument("--model", default="nomic")
     ap.add_argument("--source", choices=["lead", "profile"], default="profile")
     ap.add_argument("--profile-key", default="haiku")
-    ap.add_argument("--caption-key", default="", help="caption variant to judge (matches 07 --caption-key; baseline = empty)")
+    ap.add_argument(
+        "--method",
+        default="centroid",
+        help="stage-05 method tag on the matches file (centroid = untagged)",
+    )
+    ap.add_argument(
+        "--caption-key",
+        default="",
+        help="caption variant to judge (matches 07 --caption-key; baseline = empty)",
+    )
     ap.add_argument("--judge-model", default=JUDGE_MODEL)
     ap.add_argument("--effort", default="medium", choices=["low", "medium", "high", "xhigh", "max"])
-    ap.add_argument("--limit", type=int, default=0, help="judge only the first N pairs (0 = all); for a cheap dry run")
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="judge only the first N pairs (0 = all); for a cheap dry run",
+    )
     ap.add_argument("--force", action="store_true", help="re-judge even if cached")
     ap.add_argument("--workers", type=int, default=WORKERS)
     args = ap.parse_args()
 
     suffix = "" if args.source == "lead" else f"_profile_{args.profile_key}"
+    method_tag = "" if args.method == "centroid" else f"_{args.method}"
     cap = f"_{args.caption_key}" if args.caption_key else ""
-    matches = json.loads((PROCESSED / f"matches_{args.model}{suffix}_captioned{cap}.json").read_text())
+    matches = json.loads(
+        (PROCESSED / f"matches_{args.model}{suffix}{method_tag}_captioned{cap}.json").read_text()
+    )
     cdf = pd.read_parquet(PROCESSED / "cities.parquet")
     lead = cdf.set_index("qid")["lead_text"].to_dict()
     cities = {r.qid: (r.city, r.country, r.country_name) for r in cdf.itertuples(index=False)}
@@ -247,8 +277,16 @@ def main() -> None:
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = [
             ex.submit(
-                judge_pair, euq, naq, pairs[(euq, naq)][0], lead[euq], lead[naq],
-                model=args.judge_model, effort=args.effort, caption_key=args.caption_key, force=args.force,
+                judge_pair,
+                euq,
+                naq,
+                pairs[(euq, naq)][0],
+                lead[euq],
+                lead[naq],
+                model=args.judge_model,
+                effort=args.effort,
+                caption_key=args.caption_key,
+                force=args.force,
             )
             for euq, naq in keys
         ]
@@ -266,7 +304,7 @@ def main() -> None:
     df = pd.DataFrame(rows)
     report(df)
 
-    out_path = PROCESSED / f"caption_judgments_{args.model}{suffix}{cap}.parquet"
+    out_path = PROCESSED / f"caption_judgments_{args.model}{suffix}{method_tag}{cap}.parquet"
     write_df(df, out_path)
     print(f"\nWrote {len(df)} judgments -> {out_path.name}")
 
