@@ -115,6 +115,19 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
   {v1..v4.1}`; 02b `--prompt {v1,rich}`. Method/rank/caption-key tags keep ablation outputs from
   colliding with the shipped files.
 
+## Research positioning (lit review 2026-07-02 → `blog-assets/RELATED_WORK.md`)
+Per-claim novelty verdicts + the blog citation shortlist live there. Headlines: the lineup is novel
+**as a composition** (its family is real — REG comprehension, self-retrieval captioning, Chang-2009
+intrusion tests — cite it, don't hide it); no prior applied "preference judge ties, grounded metric
+separates" case study found; closest artifact = Fitzpatrick & Dunn 2019's climate-analog maps
+(nobody has done the character version). A workshop+ paper centred on the lineup + two-graders
+finding is plausible — second domain = Toponymy topic-name eval ("wayfinding" Phase 4, sketched
+2026-07-03 in `~/repos/toponymy` `experiments/label_quality/PLAN.md`).
+**Active next (decided 2026-07-03): lineup-guided best-of-k caption reranking** (RELATED_WORK.md
+§ improvement op 1) — selection, not prompt tweaks, to attack the specificity↔honesty frontier;
+consider a pilot (~k=4 × ~30 pairs) first; Goodhart guard = validate on a held-out lineup config
+(different grader model + distractor draw).
+
 ## Settled — don't re-explore
 - Selection = prominence (Wikipedia sitelinks), not population. Scope = North America (US+CA+MX) ↔
   geographic Europe (44 states, transcontinental excluded), 250/side. **Membership is geographic, not
