@@ -110,6 +110,9 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
   specific-shared caption built on a *coincidental* trait), but as a subjective preference it's the weaker
   instrument where the two disagree. `--config LABEL=FILE` (≥2).
 - `judge_captions.py` — Opus LLM-as-judge on caption honesty (per-claim one-sided / scale / invention).
+- `rerank_captions.py` — best-of-k caption-selection harness (generators: `--gen iid / diverse /
+  diverse-rich`; lineup-argmax + honesty-gated policies via `--judge all`; built-in held-out
+  Goodhart config = second grader model + fresh distractor draw). Experiment settled — see Settled.
 - **Additive experiment flags (defaults now reproduce the qwen3 shipped map):** 03 `--model {nomic,bge,qwen3}` (default qwen3);
   05 `--method {centroid,leace,raw_pca}` + `--rank {csls,cosine}`; 07 `--method`/`--sample`/`--prompt
   {v1..v4.1}`; 02b `--prompt {v1,rich}`. Method/rank/caption-key tags keep ablation outputs from
@@ -123,10 +126,10 @@ separates" case study found; closest artifact = Fitzpatrick & Dunn 2019's climat
 (nobody has done the character version). A workshop+ paper centred on the lineup + two-graders
 finding is plausible — second domain = Toponymy topic-name eval ("wayfinding" Phase 4, sketched
 2026-07-03 in `~/repos/toponymy` `experiments/label_quality/PLAN.md`).
-**Active next (decided 2026-07-03): lineup-guided best-of-k caption reranking** (RELATED_WORK.md
-§ improvement op 1) — selection, not prompt tweaks, to attack the specificity↔honesty frontier;
-consider a pilot (~k=4 × ~30 pairs) first; Goodhart guard = validate on a held-out lineup config
-(different grader model + distractor draw).
+**Best-of-k caption reranking (improvement op 1): run and settled 2026-07-03 — NOT adopted; see
+Settled for the numbers.** Net gain for the paper/blog story: a real applied Goodhart catch by the
+held-out lineup config, and the per-candidate honesty gate as the only escape from the
+specificity↔honesty frontier — both strengthen the "grounded metric + guards" thesis.
 
 ## Settled — don't re-explore
 - Selection = prominence (Wikipedia sitelinks), not population. Scope = North America (US+CA+MX) ↔
@@ -169,5 +172,20 @@ consider a pilot (~k=4 × ~30 pairs) first; Goodhart guard = validate on a held-
   **specificity↔honesty frontier** (single-prompt tweaks just shuffle the failure among {one-sided ↔
   scale-overclaim ↔ bland}), so **v3 stays**. Captions are written from *leads*, a ceiling separate
   from matching — the only remaining lever is a richer caption *source*, deliberately not pursued.
+- **Best-of-k caption reranking (RELATED_WORK op 1) — run 2026-07-03, NOT adopted; captions stay
+  Sonnet-5/v3.** Three 30-pair pilots (`rerank_captions.py`, exp-keys `bok_pilot/bok_div/bok_div2`;
+  held-out guard = Opus grader + fresh 5-of-top-9 nn draw): (1) iid k=4 samples are *paraphrases*
+  (token-Jaccard 0.44; grader test–retest SD ≈0.011), so the +0.018 in-sample gain was
+  lineup-draw-specific fit that didn't transfer — a textbook applied Goodhart catch; (2)
+  trait-diverse candidates make selection genuine (+0.023–0.026 over the pool held-out, A→B
+  transfer ρ≈0.5) but the pool sits at/below shipped; (3) rich multi-trait candidates close the
+  pool gap while re-loading one-sidedness (raw argmax picks 70% one-sided — the frontier reappears
+  *inside the pool*). No variant beat shipped discriminability (n=30, all deltas n.s.). The
+  **honesty gate** (argmax among judge-clean candidates, fallback shipped) cut one-sided
+  46.7%→10–23% under an independent second judge at flat discriminability — real, but
+  reader-invisible (the reader-facing metric didn't move), judge-noisy (Opus↔Sonnet agree
+  ~67–70%/caption), and complexity-heavy (~$130–260 at scale plus a style-rule layer: the gate
+  passes truth-but-not-taste hooks like GaWC classes and population counts). Don't revisit without
+  a new reason; a caption that bugs on the map is a one-off curation edit, not machinery.
 - Dropped: 1:1 bijection, convex reconstruction, MMR, output-surgery / masking / name-subspace
   erasure (`scripts/prototype_*.py`).
