@@ -23,7 +23,9 @@
   --border:       #7d6f54;   /* country borders — ink-family, not beige-family */
   --frame:        #d8cfb7;   /* map-card frame */
 
-  --dot:          #97896b;
+  --dot:          #7a5f48;   /* sepia-brown, 4.1:1 vs land (2026-07-04): dots are the CONTENT — they
+                                must out-rank the border/coast context lines, and the hue shift keeps
+                                them from reading as terrain texture */
   --sel:          #cf3b23;    /* vermilion — selected city */
   --sel-deep:     #b3311b;
   --match:        #1a7b73;    /* deep teal — its counterparts */
@@ -85,13 +87,15 @@ body::before {   /* printed-paper tooth */
   fill: var(--ink-faint); pointer-events: none;   /* full opacity — a .75 multiplier sank it to 2.1:1 */
 }
 
-.land     { fill: var(--land); stroke: var(--coast); stroke-width: 0.9px; stroke-linejoin: round; }
+.land     { fill: var(--land); stroke: var(--coast); stroke-width: 0.9px; stroke-linejoin: round;
+            vector-effect: non-scaling-stroke; }   /* like every other stroke — without this the
+                                                      coast became ~13px bands at deep zoom */
 .substate { fill: none; stroke: var(--substate); stroke-width: 0.5px; vector-effect: non-scaling-stroke; }
 .borders  { fill: none; stroke: var(--border); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 
 /* Dots — fill & opacity here (transitioned); radius (by prominence) driven in JS. */
-.dot { fill: var(--dot); stroke: var(--surface); stroke-width: 0.5px; opacity: 0.85;
-       transition: fill .18s ease, opacity .2s ease; }
+.dot { fill: var(--dot); stroke: var(--surface); stroke-width: 0.8px; opacity: 0.85;
+       transition: fill .18s ease, opacity .2s ease; }   /* paper casing lifts dots off the land */
 /* Unselected dots keep their normal weight while selecting — the vermilion/teal dots
    and the arcs carry the emphasis; fading everything else just made the map harder to read. */
 .is-selecting .dot--match { opacity: 1; fill: var(--match); stroke: var(--paper-card); stroke-width: 0.9px; }

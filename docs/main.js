@@ -274,8 +274,10 @@
   }
 
   function dotR(key, d) {
+    const k = S.P[key].t.k;
     const r = d && d.__hi ? (d.__role === "sel" ? R_SEL : R_MATCH) : rScale(d.rank);
-    return r / S.P[key].t.k;         // counter-scale: constant screen size across zoom
+    return (r * Math.pow(k, 0.3)) / k;   // sub-linear growth: same size at fit view, ~2.3× by 16× —
+                                         // fully counter-scaled dots felt lost in a deep-zoomed panel
   }
   function sizeDots(key, animate) {
     const sel = S.P[key].layer.select("g.dots").selectAll("circle");

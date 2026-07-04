@@ -54,10 +54,16 @@ side by side on desktop, **stacked on mobile**, each **independently pan/zoomabl
 pan, per-card reset). No shared transform, no cropped-Atlantic seam: the fused "one interrupted map"
 read as a *broken* map, so the deliberate call is two honest panels.
 - **Dots sized by prominence** (`rank`). **No basemap labels** (country labels were too sparse in NA /
-  too crowded in EU); only the selected city + its three counterparts get on-map labels.
+  too crowded in EU); only the selected city + its three counterparts get on-map labels. **Dots are
+  the CONTENT and must out-rank the context lines (borders/coast):** base dots are sepia-brown
+  `#7a5f48` (4.1:1 vs land — a *hue* step off the olive terrain family, not just lightness) with a
+  0.8px paper casing, and grow **sub-linearly with zoom** (`k^0.3` in `dotR`: same size at fit view,
+  ~2.3× by 16× — fully counter-scaled constant-size dots felt lost in a deep-zoomed panel).
 - **Contrast floor (2026-07-04, low-vision feedback — "beige blob"):** strokes re-tuned so country
   borders sit **≥3:1 against land** (WCAG graphics floor; they were 1.74:1): border `#7d6f54` @1px,
-  coast `#a2946f` @0.9px, land `#e1d6bd`, base dots `#97896b`. Don't re-lighten below 3:1.
+  coast `#a2946f` @0.9px, land `#e1d6bd`. Don't re-lighten below 3:1. **Every map stroke is
+  `non-scaling-stroke`, including the land/coast outline** — the coast was the one stroke that scaled
+  with zoom and became ~13px bands at deep zoom.
 - **Select**: hover (desktop, non-sticky preview) / tap (mobile); **click-to-pin** on desktop so you
   can move onto the card; **nearest-city snap** via a per-card d3-quadtree. → selected city vermilion,
   its three counterparts teal in the *other* card, an **arc** drawn to each across the gutter.
