@@ -88,8 +88,10 @@ claims, scale inflation) that drove the v1→v3 iteration.
 GitHub Pages — no build step, no runtime keys. It renders **two independent, framed map-cards** (North
 America and Europe), each pan/zoomable on its own; choose a city — hover, click, tap, or the search box —
 and its three character counterparts light up on the opposite card, with an arc to each and a card of
-captions — one sentence per pair, written to fit *both* cities. Searching a city recenters its panel to
-bring it clear of the info card. Regenerate its data with stage 08, then preview locally with
+captions — one sentence per pair, written to fit *both* cities. Clicking a counterpart's name on the
+card hops the selection to it; the ↗ on the selected city's title opens its Wikipedia article.
+Searching a city recenters its panel to bring it clear of the info card, and a pinned city is a
+shareable URL (`#city=<QID>`). Regenerate its data with stage 08, then preview locally with
 `python3 -m http.server -d docs` (open `http://127.0.0.1:8000`).
 
 ## Evaluation

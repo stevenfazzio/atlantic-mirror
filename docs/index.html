@@ -15,7 +15,7 @@
 
   <!-- Bump ?v= whenever style.css / main.js change: GitHub Pages serves them with max-age=600,
        so returning visitors otherwise get stale assets against a fresh index.html (bit us 2026-07-02). -->
-  <link rel="stylesheet" href="style.css?v=202607021715" />
+  <link rel="stylesheet" href="style.css?v=202607041600" />
 </head>
 <body>
   <div id="app">
@@ -31,7 +31,7 @@
     </header>
 
     <main id="stage">
-      <svg id="map" role="img" aria-label="A composite map: North American cities on one side, European cities on the other, with the Atlantic cropped out. Selecting a city highlights its three closest character analogs on the opposite continent."></svg>
+      <svg id="map" role="img" aria-label="Two framed maps, North America and Europe, side by side. Choosing a city on either map highlights its three character counterparts on the other map, connected by arcs, with a card describing what each pair shares."></svg>
 
       <div id="search" class="search" role="search">
         <button type="button" class="search__toggle" aria-label="Search for a city">
@@ -66,15 +66,14 @@
 
     <footer class="colophon">
       <span>500 cities &middot; 250 per shore, ranked by global prominence</span>
-      <span class="colophon__sep" aria-hidden="true">&bull;</span>
-      <span>character distilled by an LLM, matched by embedding geometry (CSLS)</span>
-      <span class="colophon__sep" aria-hidden="true">&bull;</span>
-      <span>English-Wikipedia leads, name- and country-neutralized before embedding</span>
+      <span class="colophon__sep colophon__method" aria-hidden="true">&bull;</span>
+      <span class="colophon__method">character distilled from Wikipedia leads by an LLM, matched by embedding geometry</span>
+      <a class="p-link colophon__gh" href="https://github.com/stevenfazzio/atlantic-mirror" target="_blank" rel="noopener">GitHub<span class="p-ext" aria-hidden="true">&#8599;</span></a>
     </footer>
   </div>
 
   <script src="vendor/d3.v7.min.js"></script>
   <script src="vendor/topojson-client.v3.min.js"></script>
-  <script src="main.js?v=202607021715" defer></script>
+  <script src="main.js?v=202607041600" defer></script>
 </body>
 </html>

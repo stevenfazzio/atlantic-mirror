@@ -12,14 +12,18 @@
 
   --ink:          #211d18;
   --ink-soft:     #6a6252;
-  --ink-faint:    #9a9080;
+  --ink-faint:    #726955;   /* darkened from #9a9080 (2026-07-04): as TEXT it was 2.1–2.8:1 —
+                                this passes 4.5:1 (WCAG AA) on paper, surface, and card alike */
 
-  --land:         #e5ddc9;
-  --land-edge:    #cdc3a8;
-  --border:       #b4a888;   /* country borders — distinctly darker than land so they read */
+  /* Land/stroke contrast tuned 2026-07-04 after low-vision feedback ("beige blob"): country
+     borders now ≥3:1 against land (WCAG graphics floor; they were 1.74:1), coast 2.7:1 vs water. */
+  --land:         #e1d6bd;
+  --coast:        #a2946f;   /* coastline — makes the landmass shape legible against the water */
+  --substate:     #bfb28c;   /* US state lines — deliberately quieter than country borders */
+  --border:       #7d6f54;   /* country borders — ink-family, not beige-family */
   --frame:        #d8cfb7;   /* map-card frame */
 
-  --dot:          #a49a83;
+  --dot:          #97896b;
   --sel:          #cf3b23;    /* vermilion — selected city */
   --sel-deep:     #b3311b;
   --match:        #1a7b73;    /* deep teal — its counterparts */
@@ -72,17 +76,18 @@ body::before {   /* printed-paper tooth */
 /* ---------- Stage / map cards ------------------------------------------- */
 #stage { position: relative; flex: 1 1 auto; min-height: 0; }
 #map { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+#map.can-pick { cursor: pointer; }   /* a click would land on a city — the only hover signal while pinned */
 
 .panel-bg    { fill: var(--surface); filter: drop-shadow(0 8px 20px rgba(33,29,24,0.10)); }
 .panel-frame { fill: none; stroke: var(--frame); stroke-width: 1px; }
 .panel-title {
   font-family: var(--sans); font-weight: 600; font-size: 10.5px; letter-spacing: 0.22em;
-  fill: var(--ink-faint); opacity: 0.75; pointer-events: none;
+  fill: var(--ink-faint); pointer-events: none;   /* full opacity — a .75 multiplier sank it to 2.1:1 */
 }
 
-.land     { fill: var(--land); stroke: var(--land-edge); stroke-width: 0.6px; stroke-linejoin: round; }
-.substate { fill: none; stroke: var(--land-edge); stroke-width: 0.5px; opacity: 0.8; vector-effect: non-scaling-stroke; }
-.borders  { fill: none; stroke: var(--border); stroke-width: 0.7px; vector-effect: non-scaling-stroke; }
+.land     { fill: var(--land); stroke: var(--coast); stroke-width: 0.9px; stroke-linejoin: round; }
+.substate { fill: none; stroke: var(--substate); stroke-width: 0.5px; vector-effect: non-scaling-stroke; }
+.borders  { fill: none; stroke: var(--border); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 
 /* Dots — fill & opacity here (transitioned); radius (by prominence) driven in JS. */
 .dot { fill: var(--dot); stroke: var(--surface); stroke-width: 0.5px; opacity: 0.85;
@@ -244,12 +249,27 @@ body::before {   /* printed-paper tooth */
   color: var(--ink-soft); margin: 0 0 13px;
 }
 .p-note em { font-style: normal; font-weight: 600; color: var(--ink); }
+/* Two kinds of link on the card, each with its OWN signifier (feedback 2026-07-04):
+   .p-link  = external (Wikipedia) — marked by ↗ alone (title only); NO resting underline, so the
+              underline signifier stays reserved for in-app actions (hover/focus restores it);
+   .p-goto  = in-app action — teal like its map dot, underlined at rest; clicking it SELECTS that
+              counterpart (its Wikipedia link is then one hop away via its own title). */
 .p-link {
   color: inherit; text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-bottom: 1px solid transparent;   /* reserved space — no layout shift on hover */
   transition: border-color .15s ease;
 }
-.p-link:hover, .p-link:focus-visible { border-bottom-color: currentColor; outline: none; }
+.p-link:hover, .p-link:focus-visible {
+  border-bottom-color: color-mix(in srgb, currentColor 55%, transparent); outline: none;
+}
+.p-ext { font-family: var(--sans); font-size: 0.72em; margin-left: 2px; }
+.p-goto {
+  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+  font: inherit; color: var(--match-deep);
+  border-bottom: 1px solid color-mix(in srgb, var(--match-deep) 35%, transparent);
+  transition: border-color .15s ease;
+}
+.p-goto:hover, .p-goto:focus-visible { border-bottom-color: currentColor; outline: none; }
 .p-match { display: grid; grid-template-columns: auto 1fr; gap: 2px 9px; margin: 0 0 11px; }
 .p-match:last-child { margin-bottom: 2px; }
 .p-match__rank {
@@ -259,6 +279,10 @@ body::before {   /* printed-paper tooth */
 .p-match__name { font-family: var(--serif); font-weight: 500; font-size: 15px; color: var(--ink); line-height: 1.12; }
 .p-match__country { font-family: var(--sans); font-weight: 400; font-size: 10.5px; color: var(--ink-soft); letter-spacing: 0.02em; }
 .p-match__cap { font-family: var(--serif); font-style: italic; font-size: 12.5px; line-height: 1.32; color: var(--ink-soft); }
+.p-pin-hint {   /* desktop hover cards only — a hover card can't be moused onto, so say how to get one that can */
+  margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--hair);
+  font-family: var(--serif); font-style: italic; font-size: 11.5px; color: var(--ink-soft);
+}
 
 /* ---------- Colophon + load --------------------------------------------- */
 .colophon {
@@ -267,6 +291,7 @@ body::before {   /* printed-paper tooth */
   border-top: 1px solid var(--hair); font-size: 10.5px; letter-spacing: 0.03em; color: var(--ink-faint);
 }
 .colophon__sep { opacity: 0.5; }
+.colophon__gh { margin-left: auto; }   /* text left, link right — the ↗/no-resting-underline external grammar */
 .masthead, .colophon { animation: rise .7s both cubic-bezier(.2,.8,.2,1); }
 .colophon { animation-delay: .12s; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -280,6 +305,9 @@ body::before {   /* printed-paper tooth */
   .masthead { grid-template-columns: 1fr; gap: 4px; }
   .masthead__rule { display: none; }
   .dek { justify-self: start; text-align: left; }
+
+  /* Footer: drop the method clause on phones — scale + GitHub are the essentials there. */
+  .colophon__method { display: none; }
 
   /* Persistent full-width search bar in the reserved top strip (no collapse → no collapse-jank). */
   .search { left: var(--edge); right: var(--edge); top: 8px; transform: none; padding: 8px 13px; }

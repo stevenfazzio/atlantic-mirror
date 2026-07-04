@@ -55,12 +55,24 @@ pan, per-card reset). No shared transform, no cropped-Atlantic seam: the fused "
 read as a *broken* map, so the deliberate call is two honest panels.
 - **Dots sized by prominence** (`rank`). **No basemap labels** (country labels were too sparse in NA /
   too crowded in EU); only the selected city + its three counterparts get on-map labels.
+- **Contrast floor (2026-07-04, low-vision feedback — "beige blob"):** strokes re-tuned so country
+  borders sit **≥3:1 against land** (WCAG graphics floor; they were 1.74:1): border `#7d6f54` @1px,
+  coast `#a2946f` @0.9px, land `#e1d6bd`, base dots `#97896b`. Don't re-lighten below 3:1.
 - **Select**: hover (desktop, non-sticky preview) / tap (mobile); **click-to-pin** on desktop so you
   can move onto the card; **nearest-city snap** via a per-card d3-quadtree. → selected city vermilion,
   its three counterparts teal in the *other* card, an **arc** drawn to each across the gutter.
-- **Info card**: desktop = a card that **tracks the selected dot** on its outer side (NA→left, EU→right,
-  clamped on-screen so it never covers the arcs; a hover card is `pointer-events:none`, only a pinned
-  one is interactive), with **Wikipedia links** for the city + counterparts. Mobile = a **peek sheet** in a
+- **Info card**: desktop = a card that **tracks the selected dot** on its outer side (NA→left, EU→right;
+  within card-width of the edge it **flips inward** rather than clamping — the clamp used to slide it
+  over the dot/cursor, which is worse than overlapping an arc; feedback 2026-07-04). Vertically the
+  **title line sits level with the dot** (fixed ~28px offset, not proportional — the name lands where
+  the user is looking and doesn't jump with card height). A hover card is `pointer-events:none`, only
+  a pinned one is interactive. **Link semantics (2026-07-04): one signifier per meaning** — **↗ +
+  no-resting-underline always and only means "external link"** (the card title's Wikipedia article;
+  the colophon's GitHub link; hover/focus restores an underline), and **underline-at-rest always and
+  only means "selects that city in-app"** (teal `.p-goto` counterpart names — pin + `focusCity`, like
+  a search pick). No per-counterpart wiki link (its article is one hop away via its own title); don't
+  give external links a resting underline or the underline signifier goes ambiguous again.
+  Mobile = a **peek sheet** in a
   reserved bottom strip (never covers the far map) with a **teaser** (the #1 counterpart's shared sentence) +
   a "See the other two" expander.
 - Each caption is written to fit **both** the city and its counterpart; the card says so explicitly (readers
@@ -84,6 +96,22 @@ read as a *broken* map, so the deliberate call is two honest panels.
   **chips** (`buildLauncher`, currently Venice/Madrid/Detroit/Boston) — a one-tap way in on a phone where
   the dots are tiny; a chip pins + recenters like a search pick. Hidden on desktop and once a city is
   selected (the peek sheet takes the strip).
+- **Usability pass (2026-07-04, HCI review after the feedback round):** stale SVG `aria-label` fixed
+  (it still described the abandoned cropped-Atlantic composite; deeper BLV accessibility deliberately
+  **deferred**, not declined); `--ink-faint` darkened `#9a9080`→`#726955` (as text it ran 2.1–2.8:1;
+  now ≥4.5:1 AA on paper/surface/card, panel titles at full opacity); **pointer cursor** whenever the
+  snap radius holds a city (`#map.can-pick` — the only hover signal while a card is pinned); hover
+  cards carry a **"Click to pin this card"** hint (desktop only; mobile always pins); **deep links** —
+  pinning writes `#city=<QID>` via `replaceState` (shareable, no history spam; hover never touches the
+  URL), applied on load + `hashchange`. **Declined — don't re-propose:** zoom +/− buttons (deliberately
+  removed earlier: global zoom is confusing, per-card buttons too busy; scroll/pinch suffices), larger
+  card type (real estate at a premium; browser zoom is the path for users needing bigger text), desktop
+  example chips, on-map 1/2/3 rank numerals, hover-snap hysteresis (selection disagreeing with
+  proximity reads worse than transient dense-cluster flicker).
+- **Colophon (simplified 2026-07-04):** two text segments + a right-aligned **GitHub ↗** link (external
+  grammar). The old distill/neutralize clauses were merged — they read as redundant, "CSLS" was footer
+  jargon, and "country-neutralized *before* embedding" was wrong (stage 04 operates on the vectors).
+  On mobile the method clause is hidden (`.colophon__method`) — scale + GitHub only.
 - **Deploy cache-busting:** GitHub Pages serves `style.css`/`main.js` with `max-age=600`, and there's no
   build step to hash filenames — so `index.html` loads them with a `?v=<datetimestamp>` query. **Bump
   that `?v=` on both links whenever you change style.css or main.js**, or returning visitors get a stale
@@ -187,5 +215,12 @@ specificity↔honesty frontier — both strengthen the "grounded metric + guards
   ~67–70%/caption), and complexity-heavy (~$130–260 at scale plus a style-rule layer: the gate
   passes truth-but-not-taste hooks like GaWC classes and population counts). Don't revisit without
   a new reason; a caption that bugs on the map is a one-off curation edit, not machinery.
+- **Brussels dedup (2026-07-04):** Q240 (enwiki *Brussels*) and Q239 (*City of Brussels*, the 195k core
+  commune) were both in — one city, two Wikidata entities with different enwiki titles, so stage 01's
+  title dedup couldn't catch it (the only true duplicate; a 20 km same-group proximity scan cleared the
+  other 499). Fixed in 01 via `EU_EXCLUDE_TITLES` (drop Q239) + `LABEL_FIX` (Q240's label
+  "Brussels-Capital Region" → "Brussels"); Białystok promoted to EU #250. Full 01→08 re-run: D.C. —
+  de-hubbed of the dupe (Q239 was its #1) — now surfaces as a counterpart for Paris/Vienna/Prague/
+  Bucharest; ~29 cities saw a #3-slot change (cloud-not-soulmate churn), cached captions untouched.
 - Dropped: 1:1 bijection, convex reconstruction, MMR, output-surgery / masking / name-subspace
   erasure (`scripts/prototype_*.py`).

@@ -144,6 +144,16 @@ NA_EXCLUDE_TITLES = {
     "Staten Island",  # NYC boroughs, not cities
     "Tenochtitlan",  # the ancient Aztec capital -- famous, but not a modern city
 }
+EU_EXCLUDE_TITLES = {
+    # Q239, the 195k-person core commune. Q240 (enwiki "Brussels", the 1.26M capital region readers
+    # mean) stays; both are distinct Wikidata entities with distinct enwiki titles, so the
+    # wikipedia_title dedup below can't catch the pair.
+    "City of Brussels",
+}
+# Display-name overrides where the Wikidata en label isn't what a map should say.
+LABEL_FIX = {
+    "Q240": "Brussels",  # label is "Brussels-Capital Region"
+}
 BAD_TITLE_RE = re.compile(
     r"(urban area|metropolitan area|metropolitan region|conurbation|agglomeration"
     r"|\((?:state|region|province|oblast|voivodeship|county|district)\))$",
@@ -290,7 +300,7 @@ def build_group(
             {
                 "country": group,
                 "country_name": name_of.get(cqid, name_of.get(group, group)),
-                "city": s["label"],
+                "city": LABEL_FIX.get(q, s["label"]),
                 "population": pop,
                 "wikipedia_title": s["title"],
                 "qid": q,
@@ -342,7 +352,7 @@ def main() -> None:
         fetch_europe(eu_qids, args.force),
         group="Europe",
         name_of=name_of,
-        exclude_titles=set(),
+        exclude_titles=EU_EXCLUDE_TITLES,
         force=args.force,
     )
 

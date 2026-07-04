@@ -64,6 +64,8 @@
     render();
     buildSearch();
     buildLauncher();
+    applyHash();                                          // restore a shared #city=<QID> link
+    window.addEventListener("hashchange", applyHash);     // replaceState doesn't fire this — no loop
     window.addEventListener("resize", debounce(onResize, 160));
   }
 
@@ -89,11 +91,14 @@
       P.group.call(P.zoom).on("dblclick.zoom", null);
       if (hoverCapable) {
         P.group.on("pointermove", (e) => {
-          if (S.pinned || e.buttons) return;
+          if (e.buttons) return;
           const q = pick(key, e);
+          svg.classed("can-pick", !!q);   // pointer cursor when a click would land on a city — the
+                                          // only hover signal while a card is pinned (previews off)
+          if (S.pinned) return;
           if (q) select(q, false); else clearSelection();     // non-sticky: clears when off a city
         });
-        P.group.on("pointerleave", () => { if (!S.pinned) clearSelection(); });
+        P.group.on("pointerleave", () => { svg.classed("can-pick", false); if (!S.pinned) clearSelection(); });
       }
       P.group.on("click", (e) => {
         const q = pick(key, e);
@@ -115,6 +120,12 @@
 
   function bindGlobal() {
     panel.querySelector(".panel__close").addEventListener("click", () => { S.pinned = false; clearSelection(); });
+    panelBody.addEventListener("click", (e) => {          // counterpart name → select it, like a search pick
+      const btn = e.target.closest(".p-goto");
+      if (!btn) return;
+      select(btn.dataset.qid, true);
+      focusCity(btn.dataset.qid);
+    });
     bar.addEventListener("click", () => { panel.classList.toggle("panel--expanded"); updateBar(); });
     window.addEventListener("keydown", (e) => { if (e.key === "Escape") { S.pinned = false; clearSelection(); } });
     d3.selectAll("#controls button").on("click", function () {
@@ -219,8 +230,17 @@
     return inside(P.t.apply(hit[1]), P.rect) ? hit[0] : null;
   }
 
+  // Deep links: a PINNED selection is a shareable URL (#city=<QID>). replaceState, not pushState —
+  // shareable without turning every explored city into a back-button entry. Hover previews never touch
+  // the URL. applyHash() runs once after init (and on manual hash edits) to restore a shared link.
+  const writeHash = (qid) => history.replaceState(null, "", qid ? "#city=" + qid : location.pathname + location.search);
+  function applyHash() {
+    const m = location.hash.match(/^#city=(Q\d+)$/);
+    if (m && S.cities[m[1]]) { select(m[1], true); focusCity(m[1]); }
+  }
+
   function select(qid, pin) {
-    if (pin) S.pinned = true;
+    if (pin) { S.pinned = true; writeHash(qid); }
     if (qid === S.selected) { if (pin) renderPanel(qid); return; }
     S.selected = qid;
     app.classList.add("has-selection");
@@ -230,6 +250,7 @@
   function clearSelection() {
     if (S.selected === null) return;
     S.selected = null;
+    if (location.hash) writeHash(null);
     app.classList.remove("has-selection");
     reapplySelection();
     panel.classList.remove("is-open", "panel--pinned");
@@ -315,8 +336,13 @@
   }
 
   // ---- info card ---------------------------------------------------------
+  // Link semantics (feedback 2026-07-04): ↗ always and ONLY means Wikipedia, and it appears once —
+  // on the selected city's title. A counterpart's name SELECTS that city; its Wikipedia article is
+  // one hop away (select it, then use its title). No per-counterpart ↗: two adjacent link kinds in
+  // one row read as "underline sometimes means external, sometimes in-app," which was confusing.
   const wikiURL = (qid) => "https://en.wikipedia.org/wiki/" + encodeURIComponent(S.cities[qid].wiki.replace(/ /g, "_"));
-  const wikiLink = (qid, text) => `<a class="p-link" href="${wikiURL(qid)}" target="_blank" rel="noopener">${esc(text)}</a>`;
+  const wikiLink = (qid, text) =>
+    `<a class="p-link" href="${wikiURL(qid)}" target="_blank" rel="noopener">${esc(text)}<span class="p-ext" aria-hidden="true">↗</span></a>`;
 
   function renderPanel(qid) {
     const c = S.cities[qid];
@@ -324,14 +350,19 @@
     const rows = c.matches.map((m, i) => {
       const t = S.cities[m.qid];
       return `<div class="p-match"><div class="p-match__rank">${i + 1}</div>` +
-        `<div class="p-match__name">${wikiLink(m.qid, t.city)} <span class="p-match__country">${esc(t.country)}</span></div>` +
+        `<div class="p-match__name">` +
+        `<button type="button" class="p-goto" data-qid="${m.qid}" title="See ${esc(t.city)}’s counterparts">${esc(t.city)}</button>` +
+        ` <span class="p-match__country">${esc(t.country)}</span></div>` +
         `<div class="p-match__cap">${esc(m.caption)}</div></div>`;
     }).join("");
+    // A hover card is pointer-events:none, so its links can't be used until pinned — say so.
+    const pinHint = S.mode === "side" && hoverCapable && !S.pinned
+      ? `<p class="p-pin-hint">Click to pin this card</p>` : "";
     panelBody.innerHTML =
       `<h2 class="p-city">${wikiLink(qid, c.city)}<span class="p-city__country">${esc(c.country)}</span></h2>` +
       `<p class="p-lead">Character counterparts in ${esc(shore)}</p>` +
       `<p class="p-note">Each description fits <em>both</em> ${esc(c.city)} and its counterpart.</p>` +
-      rows;
+      rows + pinHint;
     panel.classList.add("is-open");
     panel.classList.toggle("panel--pinned", S.pinned);   // only a pinned card is interactive (hover cards never intercept)
     panel.setAttribute("aria-hidden", "false");
@@ -345,11 +376,18 @@
     if (S.mode !== "side" || !S.selected) return;
     const [sx, sy] = screenPos(S.selected);
     const w = panel.offsetWidth, h = panel.offsetHeight, GAP = 14, M = 8;
-    // card on the OUTER side (NA → left, EU → right) so it never crosses the dot to cover the arcs,
-    // then just clamp on-screen (stays on that side rather than flipping over the arcs).
-    let left = panelKey(S.selected) === "na" ? sx - GAP - w : sx + GAP;
+    // Card on the OUTER side (NA → left, EU → right) so it doesn't cross the dot to cover the arcs —
+    // but within card-width of the edge, FLIP inward rather than clamp: the clamp slid the card back
+    // over the dot/cursor, and covering the cursor is worse than overlapping an arc (feedback 2026-07-04).
+    const outerLeft = panelKey(S.selected) === "na";
+    let left = outerLeft ? sx - GAP - w : sx + GAP;
+    if (outerLeft && left < M) left = sx + GAP;
+    else if (!outerLeft && left + w > S.W - M) left = sx - GAP - w;
     left = Math.max(M, Math.min(left, S.W - w - M));
-    const top = Math.max(M, Math.min(sy - h * 0.38, S.H - h - M));
+    // Vertically, align the card's TITLE line with the dot (≈28px from card top) — the city's name
+    // lands where the user is already looking, and a fixed offset doesn't jump with card height the
+    // way the old proportional (dot 38% down the card) placement did (feedback 2026-07-04).
+    const top = Math.max(M, Math.min(sy - 28, S.H - h - M));
     panel.style.left = `${left}px`; panel.style.top = `${top}px`;
     panel.style.right = "auto"; panel.style.bottom = "auto";
   }
