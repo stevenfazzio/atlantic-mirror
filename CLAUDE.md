@@ -11,12 +11,12 @@ work; `--force` recomputes). Primary invocation uses `--source profile --profile
 03–08 and `--model claude-haiku-4-5 --key haiku` for 02b — exact commands in README.md § Running.
 The shipped **embedder is qwen3** (`Qwen3-Embedding-0.6B`; stage 03 `--model` default) — swapped from
 nomic 2026-07-02 on the hardened-lineup evidence (see Settled).
-**Shipped captions:** stage 07 runs on Sonnet 5 with the v3 prompt (`--caption-model claude-sonnet-5
---caption-effort medium --prompt v3 --caption-key sonnet5v3`), and stage 08 must get `--caption-key
-sonnet5v3` to export them; 07/08 *defaults* (no key) still rebuild the original Haiku/v1 baseline, so
-a re-run without those flags silently reverts the map to it.
+**Shipped captions:** stage 07 runs on Sonnet 5.5 with the evidence-first v6 prompt
+(`--caption-model claude-sonnet-5-5 --caption-effort medium --prompt v6 --caption-key sonnet55v6`), and
+stage 08 must get `--caption-key sonnet55v6` to export them; 07/08 *defaults* (no key) still rebuild the
+original Haiku/v1 baseline, so a re-run without those flags silently reverts the map to it.
 `ANTHROPIC_API_KEY` is required for 02b (distill) and 07 (caption); 08 (export web JSON) needs no key.
-Products: `data/processed/matches_qwen3_profile_haiku_captioned_sonnet5v3.json` (full) and stage 08's
+Products: `data/processed/matches_qwen3_profile_haiku_captioned_sonnet55v6.json` (full) and stage 08's
 slim `docs/data/atlantic-mirror.json` (what the web map loads).
 
 ## Data safety — read before touching `data/`
@@ -149,7 +149,7 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
   Goodhart config = second grader model + fresh distractor draw). Experiment settled — see Settled.
 - **Additive experiment flags (defaults now reproduce the qwen3 shipped map):** 03 `--model {nomic,bge,qwen3}` (default qwen3);
   05 `--method {centroid,leace,raw_pca}` + `--rank {csls,cosine}`; 07 `--method`/`--sample`/`--prompt
-  {v1..v4.1}`; 02b `--prompt {v1,rich}`. Method/rank/caption-key tags keep ablation outputs from
+  {v1..v6}`; 02b `--prompt {v1,rich}`. Method/rank/caption-key tags keep ablation outputs from
   colliding with the shipped files.
 
 ## Research positioning (lit review 2026-07-02 → `blog-assets/RELATED_WORK.md`)
@@ -162,8 +162,9 @@ finding is plausible — second domain = Toponymy topic-name eval ("wayfinding" 
 2026-07-03 in `~/repos/toponymy` `experiments/label_quality/PLAN.md`).
 **Best-of-k caption reranking (improvement op 1): run and settled 2026-07-03 — NOT adopted; see
 Settled for the numbers.** Net gain for the paper/blog story: a real applied Goodhart catch by the
-held-out lineup config, and the per-candidate honesty gate as the only escape from the
-specificity↔honesty frontier — both strengthen the "grounded metric + guards" thesis.
+held-out lineup config, and the per-candidate honesty gate as an escape from the
+specificity↔honesty frontier — both strengthen the "grounded metric + guards" thesis. (The
+evidence-first v6 prompt, 2026-11-02, later proved a cheaper escape; see Settled.)
 
 ## Settled — don't re-explore
 - Selection = prominence (Wikipedia sitelinks), not population. Scope = North America (US+CA+MX) ↔
@@ -176,7 +177,8 @@ specificity↔honesty frontier — both strengthen the "grounded metric + guards
 - Distillation supersedes every name-collision fix; Haiku ≈ Opus, so Haiku is primary. **Richer
   distillation tested (2026-07, Opus + fuller `--prompt rich`):** a modest *matching*-only gain (more
   diverse, less identity leakage; per-pair edge not significant) that does NOT reach the lead-written
-  captions — **not adopted**. Full-Wikipedia-page source is matching-only too, so shelved.
+  captions — **not adopted**. Full-Wikipedia-page source is matching-only too, so shelved — on that
+  reasoning, never tested (articles average ~7,400 words vs ~300-word leads; 2026-11-02 count).
 - **Embedder = qwen3 (`Qwen3-Embedding-0.6B`), swapped from nomic 2026-07-02.** The original bake-off
   called the embedders a tie — but that was on the *pair judge* (subjective preference). On the **hardened
   lineup** (grounded), **qwen3 clearly leads** (top-1 67.7% vs nomic 61.3% @300 pairs, ahead on every
@@ -195,19 +197,30 @@ specificity↔honesty frontier — both strengthen the "grounded metric + guards
   (`blog-assets/ablation_ladder_both.html`, built via `ladder_lineup.py`). Matches are **cloud-not-soulmate** — swap the distiller and the #1
   twin moves but stays in the old ranking's top ~8%, so the matcher identifies an analog *neighborhood*,
   not a unique twin (why the map shows three).
-- **Captions (07) = Sonnet 5 + symmetry-enforcing v3 prompt (shipped 2026-07-01, commit `ac63eba`).**
-  Haiku/v1 captions were one-sided (a concrete trait true of only one city of the pair) ~84% of the
-  time → ~52% on Sonnet-5/v3, and shorter. `scripts/judge_captions.py` (Opus LLM-as-judge: per-claim
-  both/eu-only/na-only tagging + scale/invention/specificity axes, blind to cosine) is the measurement
-  rig, reusable for embedding-model experiments. The old 'call a capital "a capital city", never "a
+- **Captions (07) = Sonnet 5.5 + evidence-first v6 prompt (shipped 2026-11-02; before that Sonnet 5 +
+  v3 from 2026-07-01, commit `ac63eba`).** Haiku/v1 captions were one-sided (a concrete trait true of
+  only one city of the pair) ~84% of the time → ~52% on Sonnet-5/v3. `scripts/judge_captions.py` (Opus
+  LLM-as-judge, reads leads only: per-claim both/eu-only/na-only tagging + scale/invention/specificity
+  axes, blind to cosine) is the measurement rig. The old 'call a capital "a capital city", never "a
   state capital"' rule was **intentionally dropped** in v3 — specific capital types are fine when
-  accurate for both cities; don't re-add a blanket ban. **Caption prompt is exhausted (2026-07):**
-  v4/v4.1 tried to also fix blandness (v3 leans on templates — "on a river" 12%→41% vs v1) but hit a
-  **specificity↔honesty frontier** (single-prompt tweaks just shuffle the failure among {one-sided ↔
-  scale-overclaim ↔ bland}), so **v3 stays**. Captions are written from *leads*, a ceiling separate
-  from matching — the only remaining lever is a richer caption *source*, deliberately not pursued.
-- **Best-of-k caption reranking (RELATED_WORK op 1) — run 2026-07-03, NOT adopted; captions stay
-  Sonnet-5/v3.** Three 30-pair pilots (`rerank_captions.py`, exp-keys `bok_pilot/bok_div/bok_div2`;
+  accurate for both cities; don't re-add a blanket ban. v4/v4.1 (2026-07) tried to fix v3's blandness by
+  wording and hit a **specificity↔honesty frontier** (tweaks shuffled the failure among {one-sided ↔
+  scale-overclaim ↔ bland}). **That "caption prompt is exhausted" call is retired:** the missing lever
+  was *procedure*, not wording. Sonnet 5.5 skips thinking on this task (~55 output tokens), so the
+  symmetry check never ran, and the errors left were degree mismatches a word check passes (a reader
+  caught Denver/Innsbruck "mountain-ringed"; Denver is only near the Rockies). v6 = v5 (v3 + no-figures
+  + 20-word rules) plus a visible evidence step: per trait, an exact quote from each lead, kept only at
+  the weaker quote's strength, then the phrase in `<caption>` tags; the reply is cached as
+  `<pair>.evidence` (98.9% of quotes verbatim; the rest don't predict flags, so no code gate). All
+  1,006 pairs, frozen graders: one-sided 40.2% (v5) → **9.5%**, and 46.6% → 8.2% vs v3 on 343 judged
+  pairs; scale overclaims 5.8% → 1.2%; per claim 12.6% → 3.1%, so not just fewer claims. Lineup
+  (150-pair pilot) ties v5 at 72.4% top-1 and beats v3 on pair-min (+.024, CI +.011 to +.038). Known
+  cost: a bland tail (39 captions of ≤8 words, e.g. "A mid-sized river city") and 78 "X or Y"
+  hedges. **One hand edit:** Tirana/North Las Vegas leaked prompt language ("a broad, plainly
+  described character") and was rewritten in its cache `.txt`; `--force` reverts it, and its judge
+  verdict is for the old text.
+- **Best-of-k caption reranking (RELATED_WORK op 1) — run 2026-07-03, NOT adopted** (on Sonnet-5/v3
+  captions, before v6). Three 30-pair pilots (`rerank_captions.py`, exp-keys `bok_pilot/bok_div/bok_div2`;
   held-out guard = Opus grader + fresh 5-of-top-9 nn draw): (1) iid k=4 samples are *paraphrases*
   (token-Jaccard 0.44; grader test–retest SD ≈0.011), so the +0.018 in-sample gain was
   lineup-draw-specific fit that didn't transfer — a textbook applied Goodhart catch; (2)
@@ -217,7 +230,7 @@ specificity↔honesty frontier — both strengthen the "grounded metric + guards
   *inside the pool*). No variant beat shipped discriminability (n=30, all deltas n.s.). The
   **honesty gate** (argmax among judge-clean candidates, fallback shipped) cut one-sided
   46.7%→10–23% under an independent second judge at flat discriminability — real, but
-  reader-invisible (the reader-facing metric didn't move), judge-noisy (Opus↔Sonnet agree
+  invisible to the lineup (though readers do notice one-sided captions — the Denver report), judge-noisy (Opus↔Sonnet agree
   ~67–70%/caption), and complexity-heavy (~$130–260 at scale plus a style-rule layer: the gate
   passes truth-but-not-taste hooks like GaWC classes and population counts). Don't revisit without
   a new reason; a caption that bugs on the map is a one-off curation edit, not machinery.

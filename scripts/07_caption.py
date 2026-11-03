@@ -7,6 +7,7 @@ to European-first) and attached to the match in both directions. Cached per pair
 
 Reads:  data/processed/matches_<model>[_profile_<key>].json, data/processed/cities.parquet
 Writes: data/raw/captions/<eu_qid>__<na_qid>.txt                             cached per pair
+        data/raw/captions/<key>/<eu_qid>__<na_qid>.evidence    full reply, evidence-first prompts only
         data/processed/matches_<model>[_profile_<key>]_captioned.json
 """
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import anthropic
@@ -195,25 +197,83 @@ too.
 
 Output only the phrase -- no preamble."""
 
+# V5 is V3 plus two style rules for Sonnet 5.5, which ran past the word limit on 17% of captions and
+# began citing populations and ranking classes: discriminating hooks that read badly on the card.
+SYSTEM_V5 = SYSTEM_V3.replace(
+    "\n- Output only the phrase -- no preamble.",
+    """
+- NO FIGURES: do NOT state a population, metro size, distance, ranking, or other statistic, and no \
+ranking labels like "Gamma-level". Convey size in plain words only (small, mid-sized, large).
+- LENGTH: 20 words is a hard limit, and shorter is better. Keep only the traits that matter most \
+instead of listing everything the two leads share.
+- Output only the phrase -- no preamble.""",
+)
+assert SYSTEM_V5 != SYSTEM_V3
+
+# V6 is V5 with an evidence-first procedure. Sonnet 5.5 skips thinking on this task (~55 output
+# tokens, no thinking blocks), so the symmetry check above mostly never ran, and the one-sided errors
+# that remained were degree mismatches ("mountain-ringed" for a city merely near mountains) that a
+# word-level check passes. V6 makes the check visible -- a quote from each lead per trait, kept only at
+# the weaker quote's strength -- and the reply is saved beside the caption so code can verify quotes.
+SYSTEM_V6 = SYSTEM_V5.replace(
+    "\n- Output only the phrase -- no preamble.",
+    """
+
+Work in two steps and show both.
+
+Step 1, inside <evidence> tags: for each trait you might use, give the wording you would use and an \
+exact quote from EACH lead that supports it, copied word for word:
+TRAIT: <the caption wording>
+EUROPEAN: "<exact quote from the European lead>" or NONE
+NORTH AMERICAN: "<exact quote from the North American lead>" or NONE
+DECISION: KEEP, or CUT and why
+KEEP a trait only if both quotes support it TO THE SAME DEGREE. When one quote is weaker -- a city \
+near mountains vs one ringed by them, a port vs a major port, a city with a university vs a \
+university town -- word the trait at the weaker quote's strength, or cut it. A trait one lead does \
+not state is CUT, even if you believe it is true.
+
+Step 2, inside <caption> tags: the phrase, built only from KEPT traits and worded no stronger than \
+the weaker quote. Write nothing outside the two blocks.""",
+)
+assert SYSTEM_V6 != SYSTEM_V5
+EVIDENCE_TAG = "<caption>"
+
 PROMPTS = {
     "v1": SYSTEM_V1,
     "v2": SYSTEM_V2,
     "v3": SYSTEM_V3,
     "v4": SYSTEM_V4,
     "v4.1": SYSTEM_V4_1,
+    "v5": SYSTEM_V5,
+    "v6": SYSTEM_V6,
 }
 
 client = anthropic.Anthropic(max_retries=5)
 
 
+def final_phrase(text: str) -> str:
+    # Sonnet 5.5 often skips thinking and does the prompt's check in visible text: a draft, a note,
+    # then the revised phrase on the last line, sometimes labelled "Revised:". Single-line captions
+    # without that label pass through unchanged.
+    last = text.strip().splitlines()[-1].strip()
+    return last[len("Revised:") :].strip() if last.lower().startswith("revised:") else last
+
+
+def caption_text(reply: str) -> str:
+    """The phrase from a reply: the last <caption> block for evidence-first prompts, else final_phrase."""
+    blocks = re.findall(r"<caption>(.*?)</caption>", reply, re.S)
+    return final_phrase(blocks[-1]) if blocks else final_phrase(reply)
+
+
 def make_caption(eu_lead: str, na_lead: str, *, model: str, system: str, effort: str | None) -> str:
+    """The model's full reply; caption_text() extracts the phrase."""
     # Haiku 4.5 has no effort/adaptive-thinking; stronger models get a scratchpad to verify each
     # trait against BOTH leads (the symmetry check V2 asks for) before committing to the phrase.
     if "haiku" in model:
         kwargs = {"max_tokens": 160}
     else:
         kwargs = {
-            "max_tokens": 1200,
+            "max_tokens": 4000 if EVIDENCE_TAG in system else 1200,
             "thinking": {"type": "adaptive"},
             "output_config": {"effort": effort or "medium"},
         }
@@ -228,7 +288,11 @@ def make_caption(eu_lead: str, na_lead: str, *, model: str, system: str, effort:
         ],
         **kwargs,
     )
-    return next(b.text for b in resp.content if b.type == "text").strip()
+    reply = next(b.text for b in resp.content if b.type == "text")
+    if EVIDENCE_TAG in system and "</caption>" not in reply:
+        # truncated or off-format: fail loudly rather than cache a fragment as the caption
+        raise RuntimeError(f"no <caption> block (stop_reason={resp.stop_reason}): {reply[-200:]!r}")
+    return reply
 
 
 def caption_pair(eu_qid, na_qid, eu_lead, na_lead, *, model, system, effort, caption_key, force):
@@ -236,8 +300,15 @@ def caption_pair(eu_qid, na_qid, eu_lead, na_lead, *, model, system, effort, cap
     path = base / f"{eu_qid}__{na_qid}.txt"
     if path.exists() and not force:
         return (eu_qid, na_qid), path.read_text()
-    text = make_caption(eu_lead, na_lead, model=model, system=system, effort=effort)
+    reply = make_caption(eu_lead, na_lead, model=model, system=system, effort=effort)
+    text = caption_text(reply)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if EVIDENCE_TAG in system:
+        # keep the quotes next to the caption so they can be checked against the leads
+        ev = path.with_suffix(".evidence")
+        ev_tmp = path.with_suffix(".evidence.tmp")
+        ev_tmp.write_text(reply)
+        ev_tmp.replace(ev)
     tmp = path.with_suffix(".txt.tmp")
     tmp.write_text(text)
     tmp.replace(path)

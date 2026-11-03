@@ -65,22 +65,24 @@ uv run python scripts/03_embed.py               --source profile --profile-key h
 uv run python scripts/04_neutralize_country.py  --source profile --profile-key haiku
 uv run python scripts/05_match.py               --source profile --profile-key haiku
 uv run python scripts/07_caption.py             --source profile --profile-key haiku \
-    --caption-model claude-sonnet-5 --caption-effort medium --prompt v3 --caption-key sonnet5v3
-uv run python scripts/08_export_web.py          --source profile --profile-key haiku --caption-key sonnet5v3
+    --caption-model claude-sonnet-5-5 --caption-effort medium --prompt v6 --caption-key sonnet55v6
+uv run python scripts/08_export_web.py          --source profile --profile-key haiku --caption-key sonnet55v6
 ```
 
-Products: `data/processed/matches_qwen3_profile_haiku_captioned_sonnet5v3.json` (full — every city
+Products: `data/processed/matches_qwen3_profile_haiku_captioned_sonnet55v6.json` (full — every city
 keyed by Wikidata QID with its group, real country, coordinates, and top-3 captioned analogs) and
 stage 08's slim `docs/data/atlantic-mirror.json`, which the web map loads. Add `--force` to any stage
 to ignore its cache. The shipped **embedder is qwen3** (`Qwen3-Embedding-0.6B`; stage 03's `--model`
 default, swapped from nomic on 2026-07-02 — see Evaluation).
 
-Captions (07) run on **Sonnet 5** with the symmetry-enforcing **v3** prompt (`--caption-key
-sonnet5v3`); the stage *defaults* (`--caption-model claude-haiku-4-5 --prompt v1`, no key) reproduce
-the original Haiku baseline, kept for comparison — so pass the flags above, plus `--caption-key
-sonnet5v3` to stage 08, to rebuild the shipped map, or a re-run silently reverts to the Haiku
-captions. `scripts/judge_captions.py` is an Opus LLM-as-judge scoring caption honesty (one-sided
-claims, scale inflation) that drove the v1→v3 iteration.
+Captions (07) run on **Sonnet 5.5** with the **evidence-first v6** prompt (`--caption-key
+sonnet55v6`): for each trait it might use, the model quotes both leads and keeps the trait only as
+strongly as the weaker quote supports, then writes the phrase. Its full reply is cached beside each
+caption as `<pair>.evidence`. The stage *defaults* (`--caption-model claude-haiku-4-5 --prompt v1`,
+no key) reproduce the original Haiku baseline, kept for comparison — so pass the flags above, plus
+`--caption-key sonnet55v6` to stage 08, to rebuild the shipped map, or a re-run silently reverts to
+the Haiku captions. `scripts/judge_captions.py` is an Opus LLM-as-judge scoring caption honesty
+(one-sided claims, scale inflation) that drove the v1→v6 iteration.
 
 ## Web map
 
@@ -109,7 +111,7 @@ stages), all cached/resumable:
   sees one home city and two candidate twins and picks the better) — a useful **cross-check**, but a
   subjective one, so secondary to the grounded lineup where the two disagree.
 - `judge_captions.py` — Opus LLM-as-judge scoring caption honesty (one-sided claims, scale inflation);
-  drove the v1→v3 caption iteration.
+  drove the v1→v6 caption iteration.
 
 What they showed: text embedding + distillation drive most of the twin quality; neutralization and CSLS
 trade a little per-pair quality to keep the map diverse (un-hubbed); **the embedding model *is* a lever
