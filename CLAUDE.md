@@ -147,7 +147,8 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
 - `rerank_captions.py` — best-of-k caption-selection harness (generators: `--gen iid / diverse /
   diverse-rich`; lineup-argmax + honesty-gated policies via `--judge all`; built-in held-out
   Goodhart config = second grader model + fresh distractor draw). Experiment settled — see Settled.
-- **Additive experiment flags (defaults now reproduce the qwen3 shipped map):** 03 `--model {nomic,bge,qwen3}` (default qwen3);
+- **Additive experiment flags (defaults now reproduce the qwen3 shipped map):** 03 `--model {nomic,bge,qwen3,qwen3_8b,qwen3_8b_noignore}` (default qwen3; the 8B keys are hosted
+  on OpenRouter and need `OPENROUTER_API_KEY`);
   05 `--method {centroid,leace,raw_pca}` + `--rank {csls,cosine}`; 07 `--method`/`--sample`/`--prompt
   {v1..v6}`; 02b `--prompt {v1,rich}`. Method/rank/caption-key tags keep ablation outputs from
   colliding with the shipped files.
@@ -187,6 +188,15 @@ evidence-first v6 prompt, 2026-11-02, later proved a cheaper escape; see Settled
   swap lost Munich→Milwaukee (why the flagship moved to Venice→New Orleans; fine pre-launch). **So
   "embedding isn't the lever" is retired — it was a lever; the *subjective* metric just couldn't see it.**
   Richer profiles don't compound (opusrich flat on qwen3 too — no embedder×distillation synergy).
+- **Qwen3-Embedding-8B tested (2026-11-02), NOT adopted — 0.6B stays.** Hosted on OpenRouter pinned
+  to DeepInfra (03 `--model qwen3_8b`, plus `qwen3_8b_noignore` without the instruction's "Ignore ..."
+  sentence; hosted 4B matched local weights at cosine .9998, hosted 8B itself unchecked). Hardened
+  lineup, 300 pairs, frozen Sonnet 5 grader, Sonnet-5/v3 captions: top-1 67.7% (0.6B) vs 66.9% (8B,
+  CI −6.1 to +4.7 points) vs 66.6% (no ignore clause) — a tie, and the ignore clause showed no clear
+  effect. 8B replaced about two-thirds of match slots but stayed in 0.6B's neighbourhood (79% of its
+  picks in 0.6B's top 20 of 250; nomic 61%), more cloud-not-soulmate churn. Caveat: stage 04's 50-dim
+  PCA keeps 66% of 8B's variance vs 76% of 0.6B's, so this tested 8B *at 50 dims*; `N_PCA = 50` itself
+  has never been tested (widening to 100 moves ~20% of slots, quality unmeasured).
 - Neutralization is a quality×diversity tradeoff (raw_pca hubby / leace over-spread / **centroid the
   balance**); the ablation ladder shows each stage earns its keep on a different axis (distill→character;
   neutralize/CSLS→un-hub the map). **But the grounded lineup grades that ladder differently (2026-07-02):**

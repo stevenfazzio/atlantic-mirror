@@ -10,6 +10,9 @@ several embedders coexist for a bake-off; each model+source writes its own file 
   qwen3  Qwen3-Embedding-0.6B     instruction-tuned: we steer it toward transferable CHARACTER (not
                                   name/country) via an Instruct: ... prompt -- the encoder-side analog
                                   of the 02b distillation prompt (see CHARACTER_INSTRUCTION)
+  qwen3_8b           Qwen3-Embedding-8B hosted on OpenRouter (needs OPENROUTER_API_KEY), same
+                     instruction as qwen3, pinned to one provider so a run can't mix deployments
+  qwen3_8b_noignore  same model without the instruction's "Ignore ..." sentence (ablation arm)
 
 Each model's task string is prepended to every text, then SentenceTransformer.encode L2-normalizes.
 
@@ -22,24 +25,30 @@ Writes: identity cols + `model` + `embedding` (L2-normalized, one list[float] pe
 from __future__ import annotations
 
 import argparse
+import os
+import time
 
 import numpy as np
 import pandas as pd
+import requests
 
 from _common import PROCESSED, write_df
 
 # Instruction for instruction-tuned embedders (qwen3). Same intent as the 02b distillation prompt,
 # applied at read-time: weight the representation toward transferable character, not identity.
-CHARACTER_INSTRUCTION = (
+CHARACTER_FOCUS = (
     "Represent this city's transferable character for matching it to a similar city in another "
     "country: its economic base and main industries, geographic and physical setting, size and "
-    "regional role, the historical era that shaped it, and cultural identity. Ignore its specific "
-    "name, country, and identifying proper nouns."
+    "regional role, the historical era that shaped it, and cultural identity."
 )
+IGNORE_IDENTITY = "Ignore its specific name, country, and identifying proper nouns."
+CHARACTER_INSTRUCTION = f"{CHARACTER_FOCUS} {IGNORE_IDENTITY}"
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/embeddings"
 
 # key -> HF model, task string prepended to every text, trust_remote_code, and an optional device
-# pin (None = SentenceTransformer auto). All three run on auto device; `device` is kept as an escape
-# hatch for models with backend quirks.
+# pin (None = SentenceTransformer auto). All three local models run on auto device; `device` is kept
+# as an escape hatch for models with backend quirks. Hosted entries name a `backend` and `provider`.
 MODELS: dict[str, dict] = {
     "nomic": {
         "hf": "nomic-ai/nomic-embed-text-v1.5",
@@ -54,9 +63,64 @@ MODELS: dict[str, dict] = {
         "trc": False,
         "device": None,
     },
+    "qwen3_8b": {
+        "hf": "qwen/qwen3-embedding-8b",
+        "pre": f"Instruct: {CHARACTER_INSTRUCTION}\nQuery:",
+        "backend": "openrouter",
+        "provider": "DeepInfra",
+    },
+    "qwen3_8b_noignore": {
+        "hf": "qwen/qwen3-embedding-8b",
+        "pre": f"Instruct: {CHARACTER_FOCUS}\nQuery:",
+        "backend": "openrouter",
+        "provider": "DeepInfra",
+    },
 }
 
 ID_COLS = ["country", "rank", "city", "population", "wikipedia_title", "qid"]
+
+
+def post_embeddings(body: dict, headers: dict, max_retries: int = 4) -> dict:
+    """POST one batch, retrying only throttling, server faults, and network errors."""
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(OPENROUTER_URL, json=body, headers=headers, timeout=120)
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            if attempt == max_retries - 1:
+                raise
+            reason = str(exc)
+        else:
+            if resp.status_code not in (429, 500, 502, 503, 504) or attempt == max_retries - 1:
+                resp.raise_for_status()
+                return resp.json()
+            reason = f"status {resp.status_code}"
+        wait = min(2**attempt * 3, 60)
+        print(f"  request failed ({reason}); retrying in {wait}s...")
+        time.sleep(wait)
+    raise RuntimeError("unreachable: the last attempt returns or raises")
+
+
+def embed_hosted(texts: list[str], spec: dict, batch_size: int) -> np.ndarray:
+    """Embed via OpenRouter, pinned to one provider so a run can't mix deployments."""
+    headers = {"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"}
+    rows: list[list[float]] = []
+    cost = 0.0
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        body = {
+            "model": spec["hf"],
+            "input": batch,
+            "provider": {"order": [spec["provider"]], "allow_fallbacks": False},
+        }
+        result = post_embeddings(body, headers)
+        assert "data" in result, f"no embeddings in response: {str(result)[:300]}"
+        assert result.get("provider") == spec["provider"], f"served by {result.get('provider')!r}"
+        assert len(result["data"]) == len(batch), "response size differs from batch size"
+        rows += [r["embedding"] for r in sorted(result["data"], key=lambda r: r["index"])]
+        cost += result.get("usage", {}).get("cost", 0.0)
+    print(f"hosted by {spec['provider']}: {len(rows)} texts, ${cost:.5f}")
+    emb = np.array(rows, dtype=np.float32)
+    return emb / np.linalg.norm(emb, axis=1, keepdims=True)
 
 
 def main() -> None:
@@ -103,24 +167,27 @@ def main() -> None:
             return
         print("row set changed since last run; recomputing.")
 
-    from sentence_transformers import SentenceTransformer  # heavy import, defer past cache check
-
-    device = args.device or spec.get("device")
-    print(f"loading {spec['hf']} (model key={args.model!r}, device={device or 'auto'}) ...")
-    model = SentenceTransformer(spec["hf"], trust_remote_code=spec["trc"], device=device)
-
     pre = spec["pre"]
     texts = [pre + t for t in df[text_col].tolist()]
     print(
         f"embedding {len(texts)} {args.source}s (prepend={pre[:40]!r}{'...' if len(pre) > 40 else ''}) ..."
     )
-    emb = model.encode(
-        texts,
-        batch_size=args.batch_size,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        show_progress_bar=True,
-    ).astype(np.float32)
+
+    if spec.get("backend") == "openrouter":
+        emb = embed_hosted(texts, spec, args.batch_size)
+    else:
+        from sentence_transformers import SentenceTransformer  # heavy, defer past cache check
+
+        device = args.device or spec.get("device")
+        print(f"loading {spec['hf']} (model key={args.model!r}, device={device or 'auto'}) ...")
+        model = SentenceTransformer(spec["hf"], trust_remote_code=spec["trc"], device=device)
+        emb = model.encode(
+            texts,
+            batch_size=args.batch_size,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            show_progress_bar=True,
+        ).astype(np.float32)
 
     assert emb.shape[0] == len(df), f"row mismatch: {emb.shape[0]} vs {len(df)}"
     assert not np.isnan(emb).any(), "NaNs in embeddings"

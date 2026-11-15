@@ -172,6 +172,12 @@ def main():
             : args.sample
         ]
         keys = sorted(keys)
+    if args.distractors == "nn":
+        # A reference older than the city list can't build a lineup for a city it never saw.
+        missing = [k for k in keys if k[0] not in dctx["refvecs"] or k[1] not in dctx["refvecs"]]
+        if missing:
+            print(f"dropping {len(missing)} pairs with no reference vector: {missing}")
+            keys = [k for k in keys if k not in missing]
     print(
         f"lineup eval: {len(keys)} pairs x2 cities, lineup={LINEUP}, chance={1 / LINEUP:.3f} "
         f"(model={args.identifier_model}, key={args.label_key})"
