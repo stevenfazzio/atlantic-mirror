@@ -139,6 +139,19 @@ Built to grade a no-ground-truth task; all cached/resumable, none change the shi
   the sensitivity it lacked**; hardened, it tracks matching quality monotonically (random < population <
   shipped) and **caught the embedding lever the pair judge scored as a tie → qwen3** (see Settled).
   Metrics: per-pair prob-mass / top-1 rate / below-chance fraction + a caption-free target-diversity signal.
+  **Top-1 splits ties since 2026-11-15** (`top1_credit`). It used to count a tie as a hit, so top-1
+  figures recorded before then (this file, memory, the blog-assets charts) run 1–2 points high; no
+  verdict changed. Lineup parquets written before then lack `top1_*`, and their `rr_*` columns keep
+  the old convention.
+- `lineup_compare.py BASE NEW` — compares two cached lineup runs with no API calls. Reports a **pooled**
+  difference (the headline numbers) and a **city-paired** one (each city judged in both runs counts
+  once; a city's lineup is the same in every run, so only the label differs), both with two-way
+  cluster-robust intervals (EU city × NA city; ~94% coverage on a null simulation over the real pair
+  graph). On a matcher A/B the two can disagree: the gap is which cities each run favours, not the
+  labels. On 300-pair samples ~145 cities sit in only one run and the two reads can split (0.6B vs
+  8B: pooled +0.2 points, city-paired +6.5); `--sample 0` on both runs puts every city in both, and
+  the reads then agree (+2.1 vs +2.4 on the 2026-11-17 full-pair run; see Settled). Prefer
+  `--sample 0` for a matcher A/B: at about $9 per 1,000 judgments a full run is ~$15–20 per arm.
 - `judge_pairs.py` — blind, order-randomized head-to-head twin-quality **preference** judge (Sonnet + Opus
   spot-check), caption-free. **Now the cross-check, not the arbiter:** it catches what the lineup can't (a
   specific-shared caption built on a *coincidental* trait), but as a subjective preference it's the weaker
@@ -188,12 +201,25 @@ evidence-first v6 prompt, 2026-11-02, later proved a cheaper escape; see Settled
   swap lost Munich→Milwaukee (why the flagship moved to Venice→New Orleans; fine pre-launch). **So
   "embedding isn't the lever" is retired — it was a lever; the *subjective* metric just couldn't see it.**
   Richer profiles don't compound (opusrich flat on qwen3 too — no embedder×distillation synergy).
-- **Qwen3-Embedding-8B tested (2026-11-02), NOT adopted — 0.6B stays.** Hosted on OpenRouter pinned
-  to DeepInfra (03 `--model qwen3_8b`, plus `qwen3_8b_noignore` without the instruction's "Ignore ..."
-  sentence; hosted 4B matched local weights at cosine .9998, hosted 8B itself unchecked). Hardened
-  lineup, 300 pairs, frozen Sonnet 5 grader, Sonnet-5/v3 captions: top-1 67.7% (0.6B) vs 66.9% (8B,
-  CI −6.1 to +4.7 points) vs 66.6% (no ignore clause) — a tie, and the ignore clause showed no clear
-  effect. 8B replaced about two-thirds of match slots but stayed in 0.6B's neighbourhood (79% of its
+- **Qwen3-Embedding-8B tested (2026-11-02; full-pair rerun 2026-11-17), NOT adopted — 0.6B stays.**
+  Hosted on OpenRouter pinned to DeepInfra (03 `--model qwen3_8b`, plus `qwen3_8b_noignore` without
+  the instruction's "Ignore ..." sentence; hosted 4B matched local weights at cosine .9998, hosted 8B
+  itself unchecked). **First test:** hardened lineup, 300-pair samples, frozen Sonnet 5 grader,
+  Sonnet-5/v3 captions: top-1 67.7% (0.6B) vs 66.9% (8B, CI −6.1 to +4.7 points) vs 66.6% (no ignore
+  clause; all three count ties as hits) — a tie, and the ignore clause showed no clear effect. A
+  city-paired re-read of those samples (`lineup_compare.py`, 2026-11-15) leaned 8B by +6.5 points (CI
+  +1.7 to +11.3), which prompted the **full-pair rerun:** every displayed pair, shipped captions
+  (Sonnet 5.5 + v6), same frozen grader and nomic reference (keys `qwen3v6allnn`, 1,002 pairs, and
+  `qwen38bv6allnn`, 973 pairs; the 367 shared pairs' judgments were copied, not regraded). Top-1 66.6%
+  vs 68.7%: city-paired +2.4 points (CI −0.1 to +5.0, 499 cities), pooled +2.1 (CI −0.3 to +4.4).
+  Prob-mass +.003 (CI −.006 to +.011), pair score −.001, below-chance pairs 8.9% vs 9.6%, target
+  spread similar. **A tie that leans 8B by ~2 points of top-1 and nothing else**; a gain above ~5
+  points is ruled out, so it isn't worth replacing two-thirds of the slots and adding a hosted
+  dependency. The +6.5 did not survive: the same sampled pairs under v6 captions give +1.2 (CI −3.7 to
+  +6.2). Post-hoc only: the lean is all on European cities (+4.7, CI +1.4 to +7.9; North American
+  +0.2). The no-ignore arm was not rerun. All 978 8B pairs have v6 captions cached
+  (`matches_qwen3_8b_profile_haiku_captioned_sonnet55v6.json`), so an 8B export would need no caption
+  spend. 8B replaced about two-thirds of match slots but stayed in 0.6B's neighbourhood (79% of its
   picks in 0.6B's top 20 of 250; nomic 61%), more cloud-not-soulmate churn. Caveat: stage 04's 50-dim
   PCA keeps 66% of 8B's variance vs 76% of 0.6B's, so this tested 8B *at 50 dims*; `N_PCA = 50` itself
   has never been tested (widening to 100 moves ~20% of slots, quality unmeasured).

@@ -107,6 +107,8 @@ stages), all cached/resumable:
   city's fame). Because there's a verifiable right answer it's **grounded** — the model can't just voice
   a preference. Hardening the distractors to nearest-neighbours gave it the sensitivity a coarse version
   lacked; hardened, it tracks matching quality monotonically and is what surfaced the embedding lever.
+- `lineup_compare.py` — compares two cached lineup runs without calling the API: a pooled difference
+  and a city-paired one that holds each city and its lineup fixed, both with cluster-robust intervals.
 - `judge_pairs.py` — blind, order-randomized **head-to-head** twin-quality *preference* judge (a judge
   sees one home city and two candidate twins and picks the better) — a useful **cross-check**, but a
   subjective one, so secondary to the grounded lineup where the two disagree.

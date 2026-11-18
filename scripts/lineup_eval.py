@@ -6,8 +6,13 @@ ONLY from provided leads (so the metric measures the label, not the model's memo
 The city's score = probability mass the label puts on the true city (1.0 = uniquely identifying,
 ~1/lineup = uninformative). A label's score = the WORSE city (min) -- and we also report harmonic
 mean. High score => the label is specific, accurate, AND shared (a one-sided label fails the other
-city; a bland label fails discrimination). Distractors are embedding-independent (rank-neighbours +
-random) so the metric is fair across embedding/matching choices and non-circular.
+city; a bland label fails discrimination). Distractors: --distractors rank (similar prominence +
+random, embedding-free, easy) or nn (nearest neighbours in a fixed --ref-reps embedding, hard). A
+city's lineup depends only on the city and the reference, so two runs with the same reference show
+the grader the same candidates and differ only in the label.
+
+Top-1 splits ties (see top1_credit). To compare two runs use lineup_compare.py, which pairs them by
+pair and by city; --sample 0 scores every displayed pair, which removes sampling error over pairs.
 
 Reads:  data/processed/<--captions>, data/processed/cities.parquet
 Writes: data/raw/lineup_judgments/<label-key>/<eu>__<na>__<side>.json   cached per (label, city)
@@ -69,6 +74,18 @@ def identify(label, leads, *, model, effort):
     scores = [max(0, min(100, int(s))) for s in json.loads(text)["scores"]]  # clamp to 0-100
     n = len(leads)
     return (scores + [0] * n)[:n]  # normalize to lineup length (pad short / truncate long)
+
+
+def top1_credit(scores, true_pos):
+    """Top-1 credit for one judgment, with ties split: 1/k if the true city shares the top score
+    with k-1 others, 0 if anything outscores it. This is the expected hit rate of a grader forced
+    to pick one at random among its top-scored candidates. The cached `rank`/`recip_rank` fields
+    count a tie as a full hit (rank = 1 + number strictly greater), which rewards a bland label
+    that scores every candidate the same; derive top-1 from `scores` with this instead."""
+    t = scores[true_pos]
+    if any(s > t for s in scores):
+        return 0.0
+    return 1 / sum(s == t for s in scores)
 
 
 def build_lineup(tq, meta, dctx):
@@ -230,7 +247,9 @@ def main():
                     "caption": label,
                     "pm_eu": pm_e,
                     "pm_na": pm_n,
-                    "rr_eu": e["recip_rank"],
+                    "top1_eu": top1_credit(e["scores"], e["true_pos"]),
+                    "top1_na": top1_credit(n["scores"], n["true_pos"]),
+                    "rr_eu": e["recip_rank"],  # legacy: ties count as rank 1 (see top1_credit)
                     "rr_na": n["recip_rank"],
                     "pair_min": min(pm_e, pm_n),
                     "pair_harm": 0.0 if pm_e + pm_n == 0 else 2 * pm_e * pm_n / (pm_e + pm_n),
@@ -257,8 +276,12 @@ def report(df, key):
     print(f"  pair score (min of 2 cities):      {df['pair_min'].mean():.3f}")
     print(f"  pair score (harmonic mean):        {df['pair_harm'].mean():.3f}")
     print(f"  per-city prob-mass (pooled):       {pooled_pm.mean():.3f}")
+    top1 = pd.concat([df["top1_eu"], df["top1_na"]]).mean()
+    top1_ties_as_hits = (pd.concat([df["rr_eu"], df["rr_na"]]) == 1).mean()
     print(
-        f"  per-city top-1 identify rate:      {(pd.concat([df['rr_eu'], df['rr_na']]) == 1).mean():.1%}"
+        f"  per-city top-1 identify rate:      {top1:.1%}  "
+        f"(ties split; {top1_ties_as_hits:.1%} counting ties as hits, as numbers before "
+        f"2026-11-15 did)"
     )
     print(
         f"  fame confound corr(prob_mass, rank): {pooled_pm.corr(pooled_rank):+.3f}  "
